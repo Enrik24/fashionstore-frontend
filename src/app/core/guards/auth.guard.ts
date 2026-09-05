@@ -1,0 +1,20 @@
+import { inject } from '@angular/core';
+import { CanActivateFn, Router } from '@angular/router';
+import { StorageService } from '../services/storage.service';
+import { ToastService } from '../services/toast.service';
+
+export const authGuard: CanActivateFn = (route, state) => {
+  const storage = inject(StorageService);
+  const router = inject(Router);
+  const toast = inject(ToastService);
+
+  const token = storage.getAccessToken();
+
+  if (token) {
+    return true;
+  }
+
+  toast.info('Debes iniciar sesión para acceder a esta sección.');
+  router.navigate(['/auth/login'], { queryParams: { returnUrl: state.url } });
+  return false;
+};

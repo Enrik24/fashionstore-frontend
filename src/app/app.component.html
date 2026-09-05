@@ -1,0 +1,22 @@
+<div class="app-layout">
+  <!-- Global Toast Notifications Container -->
+  <app-toast></app-toast>
+
+  <!-- Global Loading Indicator -->
+  <app-loading></app-loading>
+
+  <!-- Global Navbar (Only on public non-admin routes) -->
+  @if (!isAdminRoute) {
+    <app-navbar></app-navbar>
+  }
+
+  <!-- Main View Routing -->
+  <div class="app-main-content">
+    <router-outlet></router-outlet>
+  </div>
+
+  <!-- Global Footer (Only on public non-admin routes) -->
+  @if (!isAdminRoute) {
+    <app-footer></app-footer>
+  }
+</div>
