@@ -1,6 +1,6 @@
 export const environment = {
   production: true,
-  apiUrl: 'https://api.fashionstore.com/api/v1',
+  apiUrl: 'https://fashionstore-backend-3wsr.onrender.com/api/v1',
   appName: 'FashionStore',
   version: '1.0.0',
   currency: 'USD',
