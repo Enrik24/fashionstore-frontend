@@ -2,11 +2,12 @@ import { Component, inject, signal, HostListener, ElementRef } from '@angular/co
 import { CommonModule } from '@angular/common';
 import { Router, RouterLink, RouterLinkActive } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
+import { CartIconComponent } from '../../../features/cart/components/cart-icon/cart-icon.component';
 
 @Component({
   selector: 'app-navbar',
   standalone: true,
-  imports: [CommonModule, RouterLink, RouterLinkActive],
+  imports: [CommonModule, RouterLink, RouterLinkActive, CartIconComponent],
   template: `
     <header class="navbar-wrapper glass">
       <div class="container navbar-container">
@@ -26,6 +27,9 @@ import { AuthService } from '../../../core/services/auth.service';
           <a routerLink="/home" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }" class="nav-link">
             <i class="ri-home-5-line"></i> Inicio
           </a>
+          <a routerLink="/catalog" routerLinkActive="active" class="nav-link">
+            <i class="ri-store-2-line"></i> Catálogo
+          </a>
           <a routerLink="/home/hombre" routerLinkActive="active" class="nav-link">
             <i class="ri-men-line"></i> Hombre
           </a>
@@ -36,6 +40,9 @@ import { AuthService } from '../../../core/services/auth.service';
 
         <!-- Right Action Items -->
         <div class="nav-actions">
+          <!-- Shopping Cart Icon -->
+          <app-cart-icon></app-cart-icon>
+
           @if (!authService.isAuthenticated()) {
             <!-- Guest Links -->
             <div class="auth-buttons">
@@ -85,7 +92,7 @@ import { AuthService } from '../../../core/services/auth.service';
                   <div class="dropdown-divider"></div>
 
                   <div class="dropdown-items">
-                    <!-- Admin Panel Link - ONLY for Administrador role -->
+                    <!-- Admin Panel Link -->
                     @if (authService.isAdmin()) {
                       <a routerLink="/admin/dashboard" class="dropdown-item admin-item" (click)="closeUserMenu()">
                         <div class="item-icon-box admin-icon-box">
@@ -99,12 +106,84 @@ import { AuthService } from '../../../core/services/auth.service';
                       </a>
                     }
 
-                    <a routerLink="/home" class="dropdown-item" (click)="closeUserMenu()">
+                    <!-- Branch Manager Link -->
+                    @if (authService.isEncargado() || authService.isAdmin()) {
+                      <a routerLink="/branch/reservations" class="dropdown-item" (click)="closeUserMenu()">
+                        <div class="item-icon-box">
+                          <i class="ri-store-3-line"></i>
+                        </div>
+                        <div class="item-text">
+                          <span class="item-title">Panel Sucursal</span>
+                          <span class="item-subtitle">Reservas y operaciones en tienda</span>
+                        </div>
+                        <i class="ri-arrow-right-s-line item-arrow"></i>
+                      </a>
+                    }
+
+                    <!-- POS Cashier Link -->
+                    @if (authService.isCajero() || authService.isAdmin()) {
+                      <a routerLink="/pos" class="dropdown-item" (click)="closeUserMenu()">
+                        <div class="item-icon-box">
+                          <i class="ri-computer-line"></i>
+                        </div>
+                        <div class="item-text">
+                          <span class="item-title">Punto de Venta POS</span>
+                          <span class="item-subtitle">Caja y ventas presenciales</span>
+                        </div>
+                        <i class="ri-arrow-right-s-line item-arrow"></i>
+                      </a>
+                      <a routerLink="/sales-history" class="dropdown-item" (click)="closeUserMenu()">
+                        <div class="item-icon-box">
+                          <i class="ri-history-line"></i>
+                        </div>
+                        <div class="item-text">
+                          <span class="item-title">Historial de Ventas</span>
+                          <span class="item-subtitle">Consultar y reimprimir comprobantes</span>
+                        </div>
+                        <i class="ri-arrow-right-s-line item-arrow"></i>
+                      </a>
+                    }
+
+                    <!-- Client Profile Links -->
+                    <a routerLink="/profile" class="dropdown-item" (click)="closeUserMenu()">
+                      <div class="item-icon-box">
+                        <i class="ri-user-settings-line"></i>
+                      </div>
+                      <div class="item-text">
+                        <span class="item-title">Mi Perfil</span>
+                        <span class="item-subtitle">Datos personales y preferencias</span>
+                      </div>
+                      <i class="ri-arrow-right-s-line item-arrow"></i>
+                    </a>
+
+                    <a routerLink="/profile/orders" class="dropdown-item" (click)="closeUserMenu()">
+                      <div class="item-icon-box">
+                        <i class="ri-file-list-3-line"></i>
+                      </div>
+                      <div class="item-text">
+                        <span class="item-title">Mis Compras</span>
+                        <span class="item-subtitle">Historial de pedidos</span>
+                      </div>
+                      <i class="ri-arrow-right-s-line item-arrow"></i>
+                    </a>
+
+                    <a routerLink="/profile/reservations" class="dropdown-item" (click)="closeUserMenu()">
+                      <div class="item-icon-box">
+                        <i class="ri-calendar-check-line"></i>
+                      </div>
+                      <div class="item-text">
+                        <span class="item-title">Mis Reservas</span>
+                        <span class="item-subtitle">Prendas en tienda</span>
+                      </div>
+                      <i class="ri-arrow-right-s-line item-arrow"></i>
+                    </a>
+
+                    <a routerLink="/catalog" class="dropdown-item" (click)="closeUserMenu()">
                       <div class="item-icon-box">
                         <i class="ri-store-2-line"></i>
                       </div>
                       <div class="item-text">
-                        <span class="item-title">Explorar Tienda</span>
+                        <span class="item-title">Explorar Catálogo</span>
                         <span class="item-subtitle">Colecciones y tendencias</span>
                       </div>
                     </a>
@@ -138,6 +217,9 @@ import { AuthService } from '../../../core/services/auth.service';
           <a routerLink="/home" (click)="closeMobileNav()" class="mobile-nav-link">
             <i class="ri-home-5-line"></i> Inicio
           </a>
+          <a routerLink="/catalog" (click)="closeMobileNav()" class="mobile-nav-link">
+            <i class="ri-store-2-line"></i> Catálogo
+          </a>
           <a routerLink="/home/hombre" (click)="closeMobileNav()" class="mobile-nav-link">
             <i class="ri-men-line"></i> Sección Hombre
           </a>
@@ -145,9 +227,36 @@ import { AuthService } from '../../../core/services/auth.service';
             <i class="ri-women-line"></i> Sección Mujer
           </a>
 
+          @if (authService.isAuthenticated()) {
+            <a routerLink="/profile" (click)="closeMobileNav()" class="mobile-nav-link">
+              <i class="ri-user-settings-line"></i> Mi Perfil
+            </a>
+            <a routerLink="/profile/orders" (click)="closeMobileNav()" class="mobile-nav-link">
+              <i class="ri-file-list-3-line"></i> Mis Compras
+            </a>
+            <a routerLink="/profile/reservations" (click)="closeMobileNav()" class="mobile-nav-link">
+              <i class="ri-calendar-check-line"></i> Mis Reservas
+            </a>
+          }
+
           @if (authService.isAuthenticated() && authService.isAdmin()) {
             <a routerLink="/admin/dashboard" (click)="closeMobileNav()" class="mobile-nav-link admin-mobile-link">
               <i class="ri-dashboard-3-line"></i> Panel Administrador
+            </a>
+          }
+
+          @if (authService.isAuthenticated() && (authService.isEncargado() || authService.isAdmin())) {
+            <a routerLink="/branch/reservations" (click)="closeMobileNav()" class="mobile-nav-link">
+              <i class="ri-store-3-line"></i> Panel Sucursal
+            </a>
+          }
+
+          @if (authService.isAuthenticated() && (authService.isCajero() || authService.isAdmin())) {
+            <a routerLink="/pos" (click)="closeMobileNav()" class="mobile-nav-link">
+              <i class="ri-computer-line"></i> Punto de Venta POS
+            </a>
+            <a routerLink="/sales-history" (click)="closeMobileNav()" class="mobile-nav-link">
+              <i class="ri-history-line"></i> Historial de Ventas
             </a>
           }
 

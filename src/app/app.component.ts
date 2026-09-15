@@ -6,6 +6,7 @@ import { NavbarComponent } from './shared/components/navbar/navbar.component';
 import { FooterComponent } from './shared/components/footer/footer.component';
 import { ToastComponent } from './shared/components/toast/toast.component';
 import { LoadingComponent } from './shared/components/loading/loading.component';
+import { AiChatWidgetComponent } from './features/ai-assistant/components/chat-widget/chat-widget.component';
 
 @Component({
   selector: 'app-root',
@@ -16,7 +17,8 @@ import { LoadingComponent } from './shared/components/loading/loading.component'
     NavbarComponent, 
     FooterComponent, 
     ToastComponent, 
-    LoadingComponent
+    LoadingComponent,
+    AiChatWidgetComponent
   ],
   templateUrl: './app.component.html',
   styleUrls: ['./app.component.scss']
@@ -28,13 +30,17 @@ export class AppComponent {
   constructor() {
     // Initial check
     const currentUrl = window.location.pathname;
-    this.isAdminRoute = currentUrl.startsWith('/admin');
+    this.isAdminRoute = this.checkIsPanelRoute(currentUrl);
 
     this.router.events
       .pipe(filter(event => event instanceof NavigationEnd))
       .subscribe((event: any) => {
         const url = event.urlAfterRedirects || event.url;
-        this.isAdminRoute = url.startsWith('/admin');
+        this.isAdminRoute = this.checkIsPanelRoute(url);
       });
+  }
+
+  private checkIsPanelRoute(url: string): boolean {
+    return url.startsWith('/admin') || url.startsWith('/branch') || url.startsWith('/pos');
   }
 }

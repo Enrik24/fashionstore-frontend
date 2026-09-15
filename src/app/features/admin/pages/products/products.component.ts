@@ -12,6 +12,13 @@ import { ModalComponent } from '../../../../shared/components/modal/modal.compon
 import { CurrencyFormatPipe } from '../../../../shared/pipes/currency-format.pipe';
 import { StatusBadgePipe } from '../../../../shared/pipes/status-badge.pipe';
 
+export interface VariantStockRow {
+  sucursal_id: number;
+  talla_id: number | null;
+  color_id: number;
+  cantidad: number;
+}
+
 @Component({
   selector: 'app-products',
   standalone: true,
@@ -107,7 +114,11 @@ import { StatusBadgePipe } from '../../../../shared/pipes/status-badge.pipe';
                     <td>
                       <div class="product-cell">
                         <div class="product-thumb">
-                          <i class="ri-t-shirt-line"></i>
+                          @if (product.imagenes && product.imagenes.length > 0) {
+                            <img [src]="product.imagenes[0]" [alt]="product.nombre" class="product-thumb-img">
+                          } @else {
+                            <i class="ri-t-shirt-line"></i>
+                          }
                         </div>
                         <div>
                           <div class="product-name">{{ product.nombre }}</div>
@@ -119,10 +130,10 @@ import { StatusBadgePipe } from '../../../../shared/pipes/status-badge.pipe';
                       <span class="badge badge-primary">{{ product.categoria?.nombre || getCategoryName(product.categoria_id) }}</span>
                     </td>
                     <td>
-                      <span class="text-xs text-muted">{{ product.temporada?.nombre || 'General' }}</span>
+                      <span class="text-xs text-muted">{{ product.temporada?.nombre || getSeasonName(product.temporada_id) }}</span>
                     </td>
                     <td>
-                      <span class="text-xs font-medium">{{ product.proveedor?.nombre || 'Nacional' }}</span>
+                      <span class="text-xs font-medium">{{ product.proveedor?.nombre || getSupplierName(product.proveedor_id) }}</span>
                     </td>
                     <td>
                       <span class="font-bold text-primary">{{ product.precio | currencyFormat }}</span>
@@ -231,43 +242,166 @@ import { StatusBadgePipe } from '../../../../shared/pipes/status-badge.pipe';
             </div>
           </div>
 
-          @if (!isEditingProduct()) {
-            <!-- Initial Stock Distribution -->
-            <div class="initial-stock-section">
-              <h4 class="stock-sec-title"><i class="ri-archive-line"></i> Stock Inicial de Apertura (Opcional)</h4>
-              <p class="text-xs text-muted mb-3">Distribuye existencias iniciales para la primera sucursal:</p>
-              
-              <div class="grid grid-cols-3 form-row">
-                <div class="form-group">
-                  <label class="form-label">Sucursal:</label>
-                  <select class="form-control text-xs" #stockSucursal>
-                    @for (branch of branches(); track branch.id) {
-                      <option [value]="branch.id">{{ branch.nombre }}</option>
+          <!-- Image Upload Section -->
+          <div class="image-upload-section">
+            <label class="form-label">
+              <i class="ri-image-add-line"></i> Fotografías de la Prenda
+              <span class="text-xs text-muted font-normal">(Cloudinary)</span>
+            </label>
+
+            <!-- Dropzone -->
+            <div 
+              class="upload-dropzone" 
+              [class.is-uploading]="isUploadingImage()"
+              (click)="fileInput.click()"
+              (dragover)="onDragOver($event)"
+              (dragleave)="onDragLeave($event)"
+              (drop)="onFileDrop($event)"
+            >
+              <input 
+                #fileInput 
+                type="file" 
+                accept="image/png,image/jpeg,image/webp,image/jpg" 
+                multiple 
+                style="display: none;" 
+                (change)="onFilesSelected($event)"
+              >
+              @if (isUploadingImage()) {
+                <i class="ri-loader-4-line spin-icon dropzone-icon"></i>
+                <span class="dropzone-text">Subiendo imagen(es) a Cloudinary...</span>
+                <span class="dropzone-hint">Por favor espera</span>
+              } @else {
+                <i class="ri-upload-cloud-2-line dropzone-icon"></i>
+                <span class="dropzone-text">Haz clic o arrastra fotos aquí</span>
+                <span class="dropzone-hint">Formatos soportados: JPG, PNG, WEBP</span>
+              }
+            </div>
+
+            <!-- Previews -->
+            @if (uploadedImages().length > 0) {
+              <div class="image-preview-grid">
+                @for (img of uploadedImages(); track img.url; let idx = $index) {
+                  <div class="image-preview-card" [class.is-primary]="primaryImageIndex() === idx">
+                    <img [src]="img.url" [alt]="'Foto ' + (idx + 1)" class="preview-img">
+                    @if (primaryImageIndex() === idx) {
+                      <span class="preview-badge-main">
+                        <i class="ri-star-fill"></i> Principal
+                      </span>
+                    } @else {
+                      <button 
+                        type="button" 
+                        class="btn-set-primary" 
+                        title="Marcar como imagen principal" 
+                        (click)="setPrimaryImage(idx, $event)"
+                      >
+                        <i class="ri-star-line"></i> Principal
+                      </button>
                     }
-                  </select>
-                </div>
-
-                <div class="form-group">
-                  <label class="form-label">Talla y Color:</label>
-                  <div class="flex gap-1">
-                    <select class="form-control text-xs" #stockTalla>
-                      @for (t of sizes(); track t.id) {
-                        <option [value]="t.id">{{ t.nombre }}</option>
-                      }
-                    </select>
-                    <select class="form-control text-xs" #stockColor>
-                      @for (c of colors(); track c.id) {
-                        <option [value]="c.id">{{ c.nombre }}</option>
-                      }
-                    </select>
+                    <button 
+                      type="button" 
+                      class="btn-remove-img" 
+                      title="Eliminar imagen" 
+                      (click)="removeUploadedImage(idx, $event)"
+                    >
+                      <i class="ri-close-line"></i>
+                    </button>
                   </div>
-                </div>
-
-                <div class="form-group">
-                  <label class="form-label">Cantidad Inicial:</label>
-                  <input type="number" class="form-control" value="25" min="0" #stockQty>
-                </div>
+                }
               </div>
+            }
+          </div>
+
+          @if (!isEditingProduct()) {
+            <!-- Initial Stock / Variants Distribution -->
+            <div class="initial-stock-section">
+              <div class="stock-header-flex">
+                <div>
+                  <h4 class="stock-sec-title"><i class="ri-t-shirt-line"></i> Tallas, Colores y Existencias Iniciales</h4>
+                  <p class="text-xs text-muted mb-0">Configura combinaciones (ej. S, M, L o "Sin Talla" para gorras/accesorios) con su stock por sucursal:</p>
+                </div>
+                <button type="button" class="btn btn-sm btn-outline" (click)="addVariantRow()">
+                  <i class="ri-add-line"></i> Agregar Talla / Fila
+                </button>
+              </div>
+
+              @if (variantRows().length === 0) {
+                <div class="empty-variants-box">
+                  <p class="text-xs text-muted mb-0">No has configurado existencias iniciales. Haz clic en "+ Agregar Talla / Fila" para añadir una combinación.</p>
+                </div>
+              } @else {
+                <div class="variant-table-container">
+                  <table class="variant-table">
+                    <thead>
+                      <tr>
+                        <th>Sucursal</th>
+                        <th>Talla</th>
+                        <th>Color</th>
+                        <th style="width: 100px;">Cantidad</th>
+                        <th style="width: 44px; text-align: center;"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (row of variantRows(); track idx; let idx = $index) {
+                        <tr>
+                          <td>
+                            <select 
+                              class="form-control-xs" 
+                              [value]="row.sucursal_id"
+                              (change)="updateVariantRow(idx, 'sucursal_id', $any($event.target).value)"
+                            >
+                              @for (branch of branches(); track branch.id) {
+                                <option [value]="branch.id">{{ branch.nombre }}</option>
+                              }
+                            </select>
+                          </td>
+                          <td>
+                            <select 
+                              class="form-control-xs" 
+                              [value]="row.talla_id === null ? 'null' : row.talla_id"
+                              (change)="updateVariantRow(idx, 'talla_id', $any($event.target).value)"
+                            >
+                              <option value="null">-- Sin Talla (Gorra/Accesorio) --</option>
+                              @for (t of sizes(); track t.id) {
+                                <option [value]="t.id">{{ t.valor || t.nombre }}</option>
+                              }
+                            </select>
+                          </td>
+                          <td>
+                            <select 
+                              class="form-control-xs" 
+                              [value]="row.color_id"
+                              (change)="updateVariantRow(idx, 'color_id', $any($event.target).value)"
+                            >
+                              @for (c of colors(); track c.id) {
+                                <option [value]="c.id">{{ c.nombre }}</option>
+                              }
+                            </select>
+                          </td>
+                          <td>
+                            <input 
+                              type="number" 
+                              class="form-control-xs" 
+                              min="0"
+                              [value]="row.cantidad"
+                              (input)="updateVariantRow(idx, 'cantidad', $any($event.target).value)"
+                            >
+                          </td>
+                          <td style="text-align: center;">
+                            <button 
+                              type="button" 
+                              class="btn-delete-row" 
+                              title="Eliminar fila" 
+                              (click)="removeVariantRow(idx)"
+                            >
+                              <i class="ri-delete-bin-line"></i>
+                            </button>
+                          </td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              }
             </div>
           }
 
@@ -479,6 +613,267 @@ import { StatusBadgePipe } from '../../../../shared/pipes/status-badge.pipe';
       border-top: 1px solid var(--border-light);
     }
 
+    .image-upload-section {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      margin-top: 0.25rem;
+    }
+
+    .upload-dropzone {
+      border: 2px dashed var(--border-color);
+      border-radius: var(--radius-md);
+      padding: 1.25rem 1rem;
+      text-align: center;
+      cursor: pointer;
+      background: #f8fafc;
+      transition: all var(--transition-fast);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.25rem;
+
+      &:hover {
+        border-color: var(--accent);
+        background: rgba(197, 160, 89, 0.05);
+      }
+
+      &.is-uploading {
+        pointer-events: none;
+        opacity: 0.75;
+      }
+    }
+
+    .dropzone-icon {
+      font-size: 1.75rem;
+      color: var(--accent);
+    }
+
+    .dropzone-text {
+      font-size: 0.8125rem;
+      font-weight: 600;
+      color: var(--primary);
+    }
+
+    .dropzone-hint {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+    }
+
+    .image-preview-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+      gap: 0.6rem;
+      margin-top: 0.25rem;
+    }
+
+    .image-preview-card {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 1;
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+      border: 2px solid var(--border-color);
+      background: #f1f5f9;
+      transition: all var(--transition-fast);
+
+      &.is-primary {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 2px rgba(197, 160, 89, 0.3);
+      }
+    }
+
+    .preview-img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .preview-badge-main {
+      position: absolute;
+      top: 4px;
+      left: 4px;
+      background: var(--accent);
+      color: white;
+      font-size: 0.55rem;
+      font-weight: 700;
+      padding: 2px 5px;
+      border-radius: 3px;
+      text-transform: uppercase;
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      letter-spacing: 0.3px;
+    }
+
+    .btn-set-primary {
+      position: absolute;
+      bottom: 4px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.7);
+      color: white;
+      font-size: 0.55rem;
+      font-weight: 600;
+      padding: 2px 6px;
+      border-radius: 3px;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      white-space: nowrap;
+      opacity: 0;
+      transition: all var(--transition-fast);
+
+      &:hover {
+        background: var(--accent);
+        color: white;
+      }
+
+      .image-preview-card:hover & {
+        opacity: 1;
+      }
+    }
+
+    .btn-remove-img {
+      position: absolute;
+      top: 4px;
+      right: 4px;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: rgba(239, 68, 68, 0.9);
+      color: white;
+      border: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.75rem;
+      cursor: pointer;
+      transition: all var(--transition-fast);
+
+      &:hover {
+        background: #dc2626;
+        transform: scale(1.1);
+      }
+    }
+
+    .product-thumb-img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      border-radius: var(--radius-sm);
+    }
+
+    .initial-stock-section {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      padding: 0.85rem;
+      margin-top: 0.5rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .stock-header-flex {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.65rem;
+      gap: 0.75rem;
+    }
+
+    .stock-sec-title {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      margin: 0 0 0.15rem 0;
+    }
+
+    .variant-table-container {
+      max-height: 190px;
+      overflow-y: auto;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      background: var(--bg-card);
+    }
+
+    .variant-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.8rem;
+    }
+
+    .variant-table th {
+      background: var(--bg-subtle, rgba(0,0,0,0.03));
+      color: var(--text-muted);
+      font-weight: 600;
+      padding: 5px 8px;
+      text-align: left;
+      border-bottom: 1px solid var(--border-color);
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+
+    .variant-table td {
+      padding: 4px 8px;
+      border-bottom: 1px solid var(--border-color);
+      vertical-align: middle;
+    }
+
+    .variant-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    .form-control-xs {
+      padding: 3px 6px;
+      font-size: 0.78rem;
+      height: 28px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border-color);
+      background: var(--bg-card);
+      color: var(--text-main);
+      width: 100%;
+      outline: none;
+
+      &:focus {
+        border-color: var(--accent);
+      }
+    }
+
+    .btn-delete-row {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      width: 26px;
+      height: 26px;
+      border-radius: var(--radius-sm);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.95rem;
+      transition: all var(--transition-fast);
+
+      &:hover {
+        background: rgba(239, 68, 68, 0.15);
+        color: #ef4444;
+      }
+    }
+
+    .empty-variants-box {
+      text-align: center;
+      padding: 0.85rem;
+      border: 1px dashed var(--border-color);
+      border-radius: var(--radius-sm);
+      background: var(--bg-subtle, rgba(0,0,0,0.02));
+    }
+
     .spin-icon {
       animation: spin 1s linear infinite;
     }
@@ -514,6 +909,14 @@ export class ProductsComponent implements OnInit {
   public isProductModalOpen = signal<boolean>(false);
   public isEditingProduct = signal<boolean>(false);
   public selectedProductId = signal<number | null>(null);
+
+  // Estado de imágenes (control de nuevas vs existentes para limpieza de huérfanas en Cloudinary)
+  public uploadedImages = signal<{ url: string; public_id?: string; isNew: boolean }[]>([]);
+  public isUploadingImage = signal<boolean>(false);
+  public primaryImageIndex = signal<number>(0);
+
+  // Variantes y existencias dinámicas (talla, color, sucursal, cantidad)
+  public variantRows = signal<VariantStockRow[]>([]);
 
   public productForm: FormGroup = this.fb.group({
     sku: ['', [Validators.required, Validators.minLength(3)]],
@@ -579,9 +982,22 @@ export class ProductsComponent implements OnInit {
     });
   }
 
-  getCategoryName(catId: number): string {
+  getCategoryName(catId?: number | null): string {
+    if (!catId) return 'General';
     const cat = this.categories().find(c => c.id === catId);
     return cat ? cat.nombre : 'General';
+  }
+
+  getSeasonName(seasonId?: number | null): string {
+    if (!seasonId) return 'General';
+    const season = this.seasons().find(s => s.id === seasonId);
+    return season ? season.nombre : 'General';
+  }
+
+  getSupplierName(supplierId?: number | null): string {
+    if (!supplierId) return 'Nacional';
+    const sup = this.suppliers().find(s => s.id === supplierId);
+    return sup ? sup.nombre : 'Nacional';
   }
 
   onSearchChange(event: Event): void {
@@ -599,9 +1015,152 @@ export class ProductsComponent implements OnInit {
     this.selectedStatusFilter.set(val);
   }
 
+  // --- Métodos de Subida de Imágenes a Cloudinary ---
+  onDragOver(event: DragEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+
+  onDragLeave(event: DragEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+
+  onFileDrop(event: DragEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.dataTransfer?.files) {
+      this.uploadFiles(event.dataTransfer.files);
+    }
+  }
+
+  onFilesSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    if (input.files && input.files.length > 0) {
+      this.uploadFiles(input.files);
+      input.value = '';
+    }
+  }
+
+  uploadFiles(files: FileList | File[]): void {
+    const fileArray = Array.from(files).filter(f => f.type.startsWith('image/'));
+    if (fileArray.length === 0) return;
+
+    this.isUploadingImage.set(true);
+    let pendingCount = fileArray.length;
+
+    fileArray.forEach(file => {
+      this.catalogApi.uploadImage(file).subscribe({
+        next: (res) => {
+          this.uploadedImages.update(prev => [
+            ...prev,
+            { url: res.secure_url || res.url, public_id: res.public_id, isNew: true }
+          ]);
+          pendingCount--;
+          if (pendingCount <= 0) {
+            this.isUploadingImage.set(false);
+            this.toast.success('Imagen(es) subida(s) correctamente a Cloudinary');
+          }
+        },
+        error: (err) => {
+          console.error('Error subiendo imagen:', err);
+          pendingCount--;
+          if (pendingCount <= 0) {
+            this.isUploadingImage.set(false);
+          }
+          this.toast.error('Error al subir una de las imágenes a Cloudinary.');
+        }
+      });
+    });
+  }
+
+  removeUploadedImage(index: number, event: Event): void {
+    event.stopPropagation();
+    const img = this.uploadedImages()[index];
+    if (!img) return;
+
+    // Si es una imagen recién subida en este formulario, eliminarla de Cloudinary para no dejar huérfanas
+    if (img.public_id && img.isNew) {
+      this.catalogApi.deleteImage(img.public_id).subscribe({
+        next: () => {
+          this.toast.info('Imagen eliminada de Cloudinary');
+        },
+        error: (e) => console.error('Error al eliminar de Cloudinary:', e)
+      });
+    }
+
+    this.uploadedImages.update(prev => prev.filter((_, i) => i !== index));
+
+    // Ajustar el índice de la imagen principal si es necesario
+    const currentPrimary = this.primaryImageIndex();
+    if (index === currentPrimary) {
+      // Si se eliminó la imagen principal, la nueva principal será la primera
+      this.primaryImageIndex.set(0);
+    } else if (index < currentPrimary) {
+      // Si se eliminó una imagen antes de la principal, ajustar el índice
+      this.primaryImageIndex.set(currentPrimary - 1);
+    }
+  }
+
+  setPrimaryImage(index: number, event: Event): void {
+    event.stopPropagation();
+    if (index >= 0 && index < this.uploadedImages().length) {
+      this.primaryImageIndex.set(index);
+      this.toast.info('Imagen principal actualizada');
+    }
+  }
+
+  getOrderedImages(): { url: string; public_id?: string; isNew: boolean }[] {
+    const images = [...this.uploadedImages()];
+    const primaryIdx = this.primaryImageIndex();
+
+    if (primaryIdx > 0 && primaryIdx < images.length) {
+      // Mover la imagen principal al inicio del array
+      const [primaryImage] = images.splice(primaryIdx, 1);
+      images.unshift(primaryImage);
+    }
+
+    return images;
+  }
+
+  addVariantRow(): void {
+    const defaultBranch = this.branches().length > 0 ? this.branches()[0].id : 1;
+    const defaultColor = this.colors().length > 0 ? this.colors()[0].id : 1;
+    const defaultSize = this.sizes().length > 0 ? this.sizes()[0].id : null;
+    this.variantRows.update(prev => [
+      ...prev,
+      { sucursal_id: defaultBranch, talla_id: defaultSize, color_id: defaultColor, cantidad: 10 }
+    ]);
+  }
+
+  removeVariantRow(index: number): void {
+    this.variantRows.update(prev => prev.filter((_, i) => i !== index));
+  }
+
+  updateVariantRow(index: number, field: keyof VariantStockRow, value: any): void {
+    this.variantRows.update(rows => {
+      const updated = [...rows];
+      let parsedValue: any = value;
+      if (field === 'talla_id') {
+        parsedValue = (value === '' || value === 'null' || value === null) ? null : +value;
+      } else if (field === 'cantidad') {
+        parsedValue = Math.max(0, parseInt(value, 10) || 0);
+      } else {
+        parsedValue = +value;
+      }
+      updated[index] = {
+        ...updated[index],
+        [field]: parsedValue
+      };
+      return updated;
+    });
+  }
+
   openCreateProductModal(): void {
     this.isEditingProduct.set(false);
     this.selectedProductId.set(null);
+    this.uploadedImages.set([]);
+    this.primaryImageIndex.set(0);
     this.productForm.reset({
       sku: 'PRD-' + Math.floor(1000 + Math.random() * 9000),
       nombre: '',
@@ -612,12 +1171,28 @@ export class ProductsComponent implements OnInit {
       proveedor_id: null,
       estado: 'ACTIVO'
     });
+
+    const defaultBranch = this.branches().length > 0 ? this.branches()[0].id : 1;
+    const defaultColor = this.colors().length > 0 ? this.colors()[0].id : 1;
+    const defaultSize = this.sizes().length > 0 ? this.sizes()[0].id : null;
+
+    this.variantRows.set([
+      { sucursal_id: defaultBranch, talla_id: defaultSize, color_id: defaultColor, cantidad: 25 }
+    ]);
     this.isProductModalOpen.set(true);
   }
 
   openEditProductModal(product: Producto): void {
     this.isEditingProduct.set(true);
     this.selectedProductId.set(product.id);
+    // Cargar imágenes existentes como isNew: false para no borrarlas al cancelar
+    const existingImgs = (product.imagenes || []).map(url => ({
+      url,
+      isNew: false
+    }));
+    this.uploadedImages.set(existingImgs);
+    this.primaryImageIndex.set(0);
+
     this.productForm.patchValue({
       sku: product.sku,
       nombre: product.nombre,
@@ -632,6 +1207,21 @@ export class ProductsComponent implements OnInit {
   }
 
   closeProductModal(): void {
+    // Limpieza de huérfanas: si el admin subió imágenes en esta sesión y cancela el modal, se eliminan de Cloudinary
+    const orphans = this.uploadedImages().filter(img => img.isNew && img.public_id);
+    if (orphans.length > 0) {
+      orphans.forEach(img => {
+        if (img.public_id) {
+          this.catalogApi.deleteImage(img.public_id).subscribe({
+            next: () => console.log(`Imagen huérfana eliminada de Cloudinary: ${img.public_id}`),
+            error: (e) => console.error(`Error al eliminar imagen huérfana ${img.public_id}:`, e)
+          });
+        }
+      });
+      this.toast.info('Imágenes temporales canceladas eliminadas de Cloudinary.');
+    }
+
+    this.uploadedImages.set([]);
     this.isProductModalOpen.set(false);
   }
 
@@ -640,6 +1230,8 @@ export class ProductsComponent implements OnInit {
 
     this.isSaving.set(true);
     const formVal = this.productForm.value;
+    // Usar getOrderedImages() para que la imagen principal sea la primera
+    const imageUrls = this.getOrderedImages().map(img => img.url);
 
     if (this.isEditingProduct() && this.selectedProductId()) {
       const updateDto: ProductoUpdateDto = {
@@ -649,28 +1241,27 @@ export class ProductsComponent implements OnInit {
         categoria_id: +formVal.categoria_id,
         temporada_id: formVal.temporada_id ? +formVal.temporada_id : undefined,
         proveedor_id: formVal.proveedor_id ? +formVal.proveedor_id : undefined,
-        estado: formVal.estado
+        estado: formVal.estado,
+        imagenes: imageUrls
       };
 
       this.catalogApi.updateProduct(this.selectedProductId()!, updateDto).subscribe({
         next: () => {
           this.toast.success('Producto actualizado exitosamente.');
           this.isSaving.set(false);
-          this.closeProductModal();
+          this.uploadedImages.set([]); // Limpia para no ejecutar cleanup al cerrar
+          this.isProductModalOpen.set(false);
           this.loadAllData();
         },
         error: () => this.isSaving.set(false)
       });
     } else {
-      const stockItems: StockPorSucursalItem[] = [];
-      if (this.branches().length > 0 && this.sizes().length > 0 && this.colors().length > 0) {
-        stockItems.push({
-          sucursal_id: this.branches()[0].id,
-          talla_id: this.sizes()[0].id,
-          color_id: this.colors()[0].id,
-          cantidad: 20
-        });
-      }
+      const stockItems: StockPorSucursalItem[] = this.variantRows().map(r => ({
+        sucursal_id: +r.sucursal_id,
+        talla_id: r.talla_id !== null ? +r.talla_id : null,
+        color_id: +r.color_id,
+        cantidad: +r.cantidad || 0
+      }));
 
       const createDto: ProductoCreateDto = {
         sku: formVal.sku,
@@ -681,14 +1272,16 @@ export class ProductsComponent implements OnInit {
         temporada_id: formVal.temporada_id ? +formVal.temporada_id : undefined,
         proveedor_id: formVal.proveedor_id ? +formVal.proveedor_id : undefined,
         estado: formVal.estado,
-        stock_por_sucursal: stockItems
+        imagenes: imageUrls,
+        stock_por_sucursal: stockItems.length > 0 ? stockItems : undefined
       };
 
       this.catalogApi.createProduct(createDto).subscribe({
         next: () => {
-          this.toast.success('Producto creado y agregado al catálogo con existencias iniciales.');
+          this.toast.success('Producto creado y agregado al catálogo con imágenes y existencias.');
           this.isSaving.set(false);
-          this.closeProductModal();
+          this.uploadedImages.set([]); // Limpia para no ejecutar cleanup al cerrar
+          this.isProductModalOpen.set(false);
           this.loadAllData();
         },
         error: () => this.isSaving.set(false)

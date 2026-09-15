@@ -107,7 +107,7 @@ import { Inventario } from '../../../../core/models/inventory.model';
                   <i class="ri-alert-fill"></i>
                 </div>
                 <div class="alert-item-content">
-                  <span class="alert-title">{{ alert.variante?.producto?.nombre || 'Variante #' + alert.variante_id }}</span>
+                  <span class="alert-title">{{ alert.variante_producto?.producto?.nombre || 'Variante #' + alert.variante_producto_id }}</span>
                   <span class="alert-desc">Sucursal: {{ alert.sucursal?.nombre || 'Sucursal #' + alert.sucursal_id }} | Stock Actual: <strong>{{ alert.cantidad }}</strong> (Mínimo: {{ alert.stock_minimo }})</span>
                 </div>
                 <a routerLink="/admin/inventory" class="btn btn-danger btn-sm">

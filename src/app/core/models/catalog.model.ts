@@ -15,20 +15,24 @@ export interface CategoriaCreateDto {
 
 export interface Talla {
   id: number;
-  nombre: string;
-  tipo?: string; // 'SUPERIOR', 'INFERIOR', 'CALZADO', 'ACCESORIO'
+  valor: string;
+  nombre?: string;
+  tipo?: string;
+  descripcion?: string;
 }
 
 export interface Color {
   id: number;
   nombre: string;
   codigo_hex?: string;
+  imagen_muestra?: string;
 }
 
 export interface Temporada {
   id: number;
   nombre: string;
-  anio?: number;
+  fecha_inicio: string;
+  fecha_fin: string;
   descripcion?: string;
 }
 
@@ -37,18 +41,29 @@ export interface Coleccion {
   nombre: string;
   descripcion?: string;
   temporada_id?: number;
+  imagen_url?: string;
+  activa?: boolean;
+  temporada?: Temporada;
 }
+
+export interface ColeccionCreateDto {
+  nombre: string;
+  descripcion?: string;
+  temporada_id?: number;
+  imagen_url?: string;
+}
+
 
 export type EstadoProducto = 'ACTIVO' | 'INACTIVO' | 'AGOTADO' | 'PROXIMO_INGRESO';
 
 export interface VarianteProducto {
   id: number;
   producto_id: number;
-  talla_id: number;
+  talla_id?: number | null;
   color_id: number;
   sku_variante?: string;
   precio_adicional?: number;
-  talla?: Talla;
+  talla?: Talla | null;
   color?: Color;
 }
 
@@ -72,8 +87,8 @@ export interface Producto {
 
 export interface StockPorSucursalItem {
   sucursal_id: number;
-  talla_id: number;
-  color_id: number;
+  talla_id?: number | null;
+  color_id?: number;
   cantidad: number;
 }
 

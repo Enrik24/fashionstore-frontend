@@ -30,3 +30,14 @@ export interface UserUpdateDto {
   telefono?: string;
   estado?: EstadoUsuario;
 }
+
+export interface ClientProfile {
+  id: number;
+  nit_ci: string;
+  direccion_envio?: string;
+  nombre: string;
+  apellido: string;
+  correo: string;
+  telefono?: string;
+  fecha_registro: string;
+}

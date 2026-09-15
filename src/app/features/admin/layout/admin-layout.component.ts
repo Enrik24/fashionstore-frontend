@@ -84,7 +84,36 @@ import { BreadcrumbsComponent } from '../../../shared/components/breadcrumbs/bre
               <span>Inventario & Stock</span>
             }
           </a>
+
+          <a routerLink="/admin/product-attributes" routerLinkActive="active" class="sidebar-link" title="Características de Producto">
+            <i class="ri-price-tag-3-line"></i>
+            @if (!isSidebarCollapsed()) {
+              <span>Características de Producto</span>
+            }
+          </a>
+
+          <a routerLink="/admin/coupons" routerLinkActive="active" class="sidebar-link" title="Cupones de Descuento (CU18)">
+            <i class="ri-coupon-3-line"></i>
+            @if (!isSidebarCollapsed()) {
+              <span>Cupones de Descuento</span>
+            }
+          </a>
+
+          <a routerLink="/admin/reports" routerLinkActive="active" class="sidebar-link" title="Reportes Analíticos & KPIs (CU15/CU07/CU22)">
+            <i class="ri-bar-chart-grouped-line"></i>
+            @if (!isSidebarCollapsed()) {
+              <span>Reportes & KPIs</span>
+            }
+          </a>
+
+          <a routerLink="/admin/audit" routerLinkActive="active" class="sidebar-link" title="Bitácora de Auditoría">
+            <i class="ri-shield-keyhole-line"></i>
+            @if (!isSidebarCollapsed()) {
+              <span>Bitácora de Auditoría</span>
+            }
+          </a>
         </nav>
+
 
         <div class="sidebar-footer">
           <a routerLink="/home" class="sidebar-link return-shop-link" title="Volver a la Tienda">

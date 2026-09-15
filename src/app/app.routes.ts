@@ -1,6 +1,8 @@
 import { Routes } from '@angular/router';
 import { authGuard } from './core/guards/auth.guard';
 import { adminGuard } from './core/guards/admin.guard';
+import { branchManagerGuard } from './core/guards/branch-manager.guard';
+import { cashierGuard } from './core/guards/cashier.guard';
 
 export const routes: Routes = [
   {
@@ -29,6 +31,76 @@ export const routes: Routes = [
     ]
   },
   {
+    path: 'catalog',
+    children: [
+      {
+        path: '',
+        loadComponent: () => import('./features/catalog/pages/catalog-list/catalog-list.component').then(m => m.CatalogListComponent),
+        title: 'FashionStore - Catálogo Completo'
+      },
+      {
+        path: ':id',
+        loadComponent: () => import('./features/catalog/pages/product-detail/product-detail.component').then(m => m.ProductDetailComponent),
+        title: 'FashionStore - Detalle de Producto'
+      }
+    ]
+  },
+  {
+    path: 'cart',
+    loadComponent: () => import('./features/cart/pages/cart-page/cart-page.component').then(m => m.CartPageComponent),
+    title: 'FashionStore - Mi Carrito de Compras'
+  },
+  {
+    path: 'checkout',
+    children: [
+      {
+        path: '',
+        loadComponent: () => import('./features/checkout/pages/checkout-page/checkout-page.component').then(m => m.CheckoutPageComponent),
+        canActivate: [authGuard],
+        title: 'FashionStore - Finalizar Compra'
+      },
+      {
+        path: 'success',
+        loadComponent: () => import('./features/checkout/pages/payment-success/payment-success.component').then(m => m.PaymentSuccessComponent),
+        title: 'FashionStore - Pago Exitoso'
+      },
+      {
+        path: 'cancel',
+        loadComponent: () => import('./features/checkout/pages/payment-cancel/payment-cancel.component').then(m => m.PaymentCancelComponent),
+        title: 'FashionStore - Pago Cancelado'
+      }
+    ]
+  },
+  {
+    path: 'branch',
+    loadComponent: () => import('./features/branch-manager/layout/branch-layout.component').then(m => m.BranchLayoutComponent),
+    canActivate: [authGuard, branchManagerGuard],
+    children: [
+      {
+        path: '',
+        redirectTo: 'reservations',
+        pathMatch: 'full'
+      },
+      {
+        path: 'reservations',
+        loadComponent: () => import('./features/branch-manager/pages/reservations/branch-reservations.component').then(m => m.BranchReservationsComponent),
+        title: 'FashionStore - Reservas en Sucursal'
+      }
+    ]
+  },
+  {
+    path: 'pos',
+    loadComponent: () => import('./features/pos/pages/pos-page/pos-page.component').then(m => m.PosPageComponent),
+    canActivate: [authGuard, cashierGuard],
+    title: 'FashionStore - Terminal Punto de Venta (POS)'
+  },
+  {
+    path: 'sales-history',
+    loadComponent: () => import('./features/pos/pages/sales-history/sales-history.component').then(m => m.SalesHistoryComponent),
+    canActivate: [authGuard, cashierGuard],
+    title: 'FashionStore - Historial de Ventas Presenciales'
+  },
+  {
     path: 'auth',
     children: [
       {
@@ -45,6 +117,28 @@ export const routes: Routes = [
         path: '',
         redirectTo: 'login',
         pathMatch: 'full'
+      }
+    ]
+  },
+  {
+    path: 'profile',
+    loadComponent: () => import('./features/profile/layout/profile-layout.component').then(m => m.ProfileLayoutComponent),
+    canActivate: [authGuard],
+    children: [
+      {
+        path: '',
+        loadComponent: () => import('./features/profile/pages/profile-page/profile-page.component').then(m => m.ProfilePageComponent),
+        title: 'FashionStore - Mi Perfil de Cliente'
+      },
+      {
+        path: 'orders',
+        loadComponent: () => import('./features/profile/pages/orders-history/orders-history.component').then(m => m.OrdersHistoryComponent),
+        title: 'FashionStore - Historial de Mis Compras'
+      },
+      {
+        path: 'reservations',
+        loadComponent: () => import('./features/profile/pages/reservations-history/reservations-history.component').then(m => m.ReservationsHistoryComponent),
+        title: 'FashionStore - Mis Reservas en Tienda'
       }
     ]
   },
@@ -92,6 +186,26 @@ export const routes: Routes = [
         path: 'inventory',
         loadComponent: () => import('./features/admin/pages/inventory/inventory.component').then(m => m.InventoryComponent),
         title: 'FashionStore Admin - Gestión de Inventario'
+      },
+      {
+        path: 'product-attributes',
+        loadComponent: () => import('./features/admin/pages/product-attributes/product-attributes.component').then(m => m.ProductAttributesComponent),
+        title: 'FashionStore Admin - Características de Producto'
+      },
+      {
+        path: 'coupons',
+        loadComponent: () => import('./features/admin/pages/coupons/coupons.component').then(m => m.CouponsComponent),
+        title: 'FashionStore Admin - Cupones de Descuento (CU18)'
+      },
+      {
+        path: 'reports',
+        loadComponent: () => import('./features/admin/pages/reports/reports.component').then(m => m.ReportsComponent),
+        title: 'FashionStore Admin - Reportes Analíticos & KPIs'
+      },
+      {
+        path: 'audit',
+        loadComponent: () => import('./features/admin/pages/audit/audit.component').then(m => m.AuditComponent),
+        title: 'FashionStore Admin - Bitácora de Auditoría'
       }
     ]
   },

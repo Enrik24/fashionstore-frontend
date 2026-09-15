@@ -1,7 +1,8 @@
-import { Component, inject } from '@angular/core';
+import { Component, OnInit, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { AuthService } from '../../../../core/services/auth.service';
+import { AiService } from '../../../../core/services/ai.service';
 
 @Component({
   selector: 'app-landing',
@@ -163,6 +164,70 @@ import { AuthService } from '../../../../core/services/auth.service';
               <p class="feature-text">Recomendaciones personalizadas basadas en tus preferencias, estilo corporal, temporada y combinaciones.</p>
             </div>
           </div>
+        </div>
+      </section>
+
+      <!-- AI Fashion Trends Section (CU20) -->
+      <section class="container ai-trends-section">
+        <div class="section-header text-center">
+          <span class="section-subtitle"><i class="ri-sparkling-fill text-accent"></i> INTELIGENCIA ARTIFICIAL GENERATIVA</span>
+          <h2 class="section-title">Tendencias de Moda & Pronóstico de Estilo 2026</h2>
+          <p class="section-desc">Análisis predictivo de tendencias y popularidad calculado en tiempo real por nuestros modelos de IA.</p>
+        </div>
+
+        <div class="trends-grid">
+          @for (trend of trends(); track trend.nombre) {
+            <div class="trend-card card animate-fade-in">
+              <div class="trend-header">
+                <span class="trend-cat-tag">{{ trend.categoria }}</span>
+                <div class="popularity-badge">
+                  <i class="ri-fire-fill text-warning"></i>
+                  <span>{{ trend.popularidad_score }}% popularidad</span>
+                </div>
+              </div>
+              <h3 class="trend-name">{{ trend.nombre }}</h3>
+              <p class="trend-desc">{{ trend.descripcion }}</p>
+              <div class="trend-action">
+                <a routerLink="/catalog" class="trend-link">
+                  Explorar prendas de este estilo <i class="ri-arrow-right-line"></i>
+                </a>
+              </div>
+            </div>
+          } @empty {
+            <div class="trend-card card">
+              <div class="trend-header">
+                <span class="trend-cat-tag">Urbano & Casual</span>
+                <div class="popularity-badge"><i class="ri-fire-fill text-warning"></i> 94%</div>
+              </div>
+              <h3 class="trend-name">Minimalismo Contemporáneo</h3>
+              <p class="trend-desc">Cortes limpios, tonos neutros y tejidos sostenibles de máxima durabilidad.</p>
+              <div class="trend-action">
+                <a routerLink="/catalog" class="trend-link">Explorar <i class="ri-arrow-right-line"></i></a>
+              </div>
+            </div>
+            <div class="trend-card card">
+              <div class="trend-header">
+                <span class="trend-cat-tag">Gala & Noche</span>
+                <div class="popularity-badge"><i class="ri-fire-fill text-warning"></i> 89%</div>
+              </div>
+              <h3 class="trend-name">Elegancia Nocturna</h3>
+              <p class="trend-desc">Vestidos de seda, trajes satinados y cortes asimétricos para ocasiones especiales.</p>
+              <div class="trend-action">
+                <a routerLink="/catalog" class="trend-link">Explorar <i class="ri-arrow-right-line"></i></a>
+              </div>
+            </div>
+            <div class="trend-card card">
+              <div class="trend-header">
+                <span class="trend-cat-tag">Deportivo Chic</span>
+                <div class="popularity-badge"><i class="ri-fire-fill text-warning"></i> 91%</div>
+              </div>
+              <h3 class="trend-name">Athleisure de Alta Costura</h3>
+              <p class="trend-desc">Prendas con tecnología transpirable adaptadas para el día a día en la ciudad.</p>
+              <div class="trend-action">
+                <a routerLink="/catalog" class="trend-link">Explorar <i class="ri-arrow-right-line"></i></a>
+              </div>
+            </div>
+          }
         </div>
       </section>
 
@@ -555,6 +620,95 @@ import { AuthService } from '../../../../core/services/auth.service';
       background: linear-gradient(135deg, var(--primary-dark) 0%, #1e1b4b 100%);
     }
 
+    .ai-trends-section {
+      padding: 2rem 0;
+    }
+
+    .trends-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 1.5rem;
+      margin-top: 2rem;
+    }
+
+    .trend-card {
+      padding: 1.75rem;
+      border-radius: var(--radius-lg, 16px);
+      background: #ffffff;
+      border: 1px solid var(--border-color, #e2e8f0);
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      transition: transform 0.25s ease, box-shadow 0.25s ease;
+    }
+
+    .trend-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 12px 24px rgba(0,0,0,0.06);
+    }
+
+    .trend-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .trend-cat-tag {
+      background: rgba(99, 102, 241, 0.1);
+      color: #4f46e5;
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 0.2rem 0.6rem;
+      border-radius: 99px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .popularity-badge {
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: #0f172a;
+    }
+
+    .trend-name {
+      margin: 0;
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: #0f172a;
+    }
+
+    .trend-desc {
+      margin: 0;
+      font-size: 0.875rem;
+      color: #64748b;
+      line-height: 1.5;
+      flex: 1;
+    }
+
+    .trend-action {
+      margin-top: 0.5rem;
+      padding-top: 0.75rem;
+      border-top: 1px solid #f1f5f9;
+    }
+
+    .trend-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--accent, #ec4899);
+      text-decoration: none;
+      transition: gap 0.2s ease;
+    }
+
+    .trend-link:hover {
+      gap: 0.6rem;
+    }
+
     .cta-content {
       max-width: 640px;
       margin: 0 auto;
@@ -623,6 +777,20 @@ import { AuthService } from '../../../../core/services/auth.service';
     }
   `]
 })
-export class LandingComponent {
+export class LandingComponent implements OnInit {
   public authService = inject(AuthService);
+  private aiService = inject(AiService);
+
+  public trends = signal<any[]>([]);
+
+  ngOnInit(): void {
+    this.aiService.getTrends().subscribe({
+      next: (res) => {
+        if (res && res.tendencias_destacadas) {
+          this.trends.set(res.tendencias_destacadas);
+        }
+      },
+      error: () => {}
+    });
+  }
 }

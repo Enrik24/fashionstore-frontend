@@ -5,11 +5,11 @@ import { Observable, tap, catchError, of, map, throwError } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { StorageService } from './storage.service';
 import { ToastService } from './toast.service';
-import { 
-  LoginCredentials, 
-  RegisterClientData, 
-  TokenResponse, 
-  UserProfile 
+import {
+  LoginCredentials,
+  RegisterClientData,
+  TokenResponse,
+  UserProfile
 } from '../models/auth.model';
 
 @Injectable({
@@ -38,6 +38,11 @@ export class AuthService {
     if (!user || !user.roles) return false;
     return user.roles.some(r => r.nombre.toLowerCase() === 'encargado' || r.nombre.toLowerCase() === 'encargado de sucursal');
   });
+  public isCajero = computed(() => {
+    const user = this.currentUserSignal();
+    if (!user || !user.roles) return false;
+    return user.roles.some(r => r.nombre.toLowerCase() === 'cajero');
+  });
 
   constructor() {
     // If token exists, load fresh profile
@@ -62,6 +67,10 @@ export class AuthService {
             this.toast.success(`¡Bienvenido de nuevo, ${user.nombre}!`);
             if (this.isAdmin()) {
               this.router.navigate(['/admin/dashboard']);
+            } else if (this.isEncargado()) {
+              this.router.navigate(['/branch/reservations']);
+            } else if (this.isCajero()) {
+              this.router.navigate(['/pos']);
             } else {
               this.router.navigate(['/home']);
             }
