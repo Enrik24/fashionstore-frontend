@@ -29,6 +29,11 @@ export class OrderService {
     return this.http.get<Orden>(`${this.API_URL}/${id}`);
   }
 
+  /** Devuelve los ítems de una orden pendiente al carrito y la cancela (pago cancelado). */
+  restoreCartFromOrder(id: number): Observable<unknown> {
+    return this.http.post(`${this.API_URL}/${id}/restaurar-carrito`, {});
+  }
+
   getOrderReceipt(id: number): Observable<Comprobante> {
     return this.http.get<Comprobante>(`${this.API_URL}/${id}/comprobante`);
   }

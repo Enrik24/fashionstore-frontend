@@ -1,6 +1,10 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { OrderService } from '../../../../core/services/order.service';
+import { PaymentService } from '../../../../core/services/payment.service';
+import { ToastService } from '../../../../core/services/toast.service';
+import { Orden } from '../../../../core/models/cart.model';
 
 @Component({
   selector: 'app-payment-cancel',
@@ -15,14 +19,31 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
           </div>
 
           <h1 class="cancel-title">Pago Cancelado</h1>
-          <p class="cancel-subtitle">
-            El proceso de pago no se completó. Tus prendas siguen guardadas en tu carrito de compras.
-          </p>
+          @if (order(); as ord) {
+            <p class="cancel-subtitle">
+              El proceso de pago no se completó. Tu pedido
+              <strong>{{ ord.numero_orden }}</strong>
+              (Bs. {{ ord.total | number:'1.2-2' }}) quedó en espera de pago.
+            </p>
+          } @else {
+            <p class="cancel-subtitle">
+              El proceso de pago no se completó.
+            </p>
+          }
 
           <div class="actions-group">
-            <a routerLink="/cart" class="btn btn-accent btn-lg">
-              <i class="ri-shopping-cart-2-line"></i> Volver al Carrito
-            </a>
+            @if (orderId() && canRetry()) {
+              <button class="btn btn-accent btn-lg" (click)="retryPayment()" [disabled]="isProcessing()">
+                <i class="ri-refresh-line"></i> {{ isProcessing() ? 'Procesando...' : 'Reintentar pago' }}
+              </button>
+              <button class="btn btn-outline btn-lg" (click)="restoreCart()" [disabled]="isProcessing()">
+                <i class="ri-shopping-cart-2-line"></i> Devolver al carrito
+              </button>
+            } @else {
+              <a routerLink="/cart" class="btn btn-accent btn-lg">
+                <i class="ri-shopping-cart-2-line"></i> Volver al Carrito
+              </a>
+            }
             <a routerLink="/catalog" class="btn btn-outline btn-lg">
               <i class="ri-store-2-line"></i> Seguir Explorando
             </a>
@@ -81,6 +102,7 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
       display: flex;
       gap: 1rem;
       justify-content: center;
+      flex-wrap: wrap;
     }
 
     @media (max-width: 600px) {
@@ -88,4 +110,71 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
     }
   `]
 })
-export class PaymentCancelComponent {}
+export class PaymentCancelComponent implements OnInit {
+  private route = inject(ActivatedRoute);
+  private router = inject(Router);
+  private orderService = inject(OrderService);
+  private paymentService = inject(PaymentService);
+  private toast = inject(ToastService);
+
+  orderId = signal<number | null>(null);
+  order = signal<Orden | null>(null);
+  isProcessing = signal(false);
+
+  ngOnInit(): void {
+    this.route.queryParams.subscribe(params => {
+      const id = Number(params['orden_id']);
+      if (id) {
+        this.orderId.set(id);
+        this.orderService.getOrderById(id).subscribe({
+          next: ord => this.order.set(ord),
+          error: () => this.order.set(null)
+        });
+      }
+    });
+  }
+
+  canRetry(): boolean {
+    const ord = this.order();
+    return !!ord && (ord.estado === 'PENDIENTE_PAGO' as any);
+  }
+
+  retryPayment(): void {
+    const id = this.orderId();
+    if (!id || this.isProcessing()) return;
+    this.isProcessing.set(true);
+    const successUrl = `${window.location.origin}/checkout/success?orden_id=${id}&session_id={CHECKOUT_SESSION_ID}`;
+    const cancelUrl = `${window.location.origin}/checkout/cancel?orden_id=${id}`;
+    this.paymentService.createStripeCheckoutSession({ orden_id: id, success_url: successUrl, cancel_url: cancelUrl }).subscribe({
+      next: res => {
+        this.isProcessing.set(false);
+        if (res.checkout_url && res.checkout_url.startsWith('http')) {
+          window.location.href = res.checkout_url;
+        } else {
+          this.toast.error('Stripe no devolvió una URL de pago válida.');
+        }
+      },
+      error: err => {
+        this.isProcessing.set(false);
+        this.toast.error(err.error?.detail || 'No se pudo reintentar el pago. La orden puede ya estar pagada o cancelada.');
+      }
+    });
+  }
+
+  restoreCart(): void {
+    const id = this.orderId();
+    if (!id || this.isProcessing()) return;
+    this.isProcessing.set(true);
+    this.orderService.restoreCartFromOrder(id).subscribe({
+      next: () => {
+        this.isProcessing.set(false);
+        this.toast.success('Prendas devueltas a tu carrito.');
+        this.router.navigate(['/cart']);
+      },
+      error: err => {
+        this.isProcessing.set(false);
+        this.toast.error(err.error?.detail || 'No se pudo devolver al carrito.');
+      }
+    });
+  }
+}
