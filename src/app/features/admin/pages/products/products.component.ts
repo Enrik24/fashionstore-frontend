@@ -5,10 +5,12 @@ import { CatalogApiService } from '../../../../core/services/catalog-api.service
 import { SupplierApiService } from '../../../../core/services/supplier-api.service';
 import { BranchApiService } from '../../../../core/services/branch-api.service';
 import { ToastService } from '../../../../core/services/toast.service';
-import { Producto, Categoria, Temporada, Talla, Color, ProductoCreateDto, ProductoUpdateDto, StockPorSucursalItem } from '../../../../core/models/catalog.model';
+import { Producto, Categoria, Temporada, Talla, Color, Coleccion, ProductoCreateDto, ProductoUpdateDto, StockPorSucursalItem } from '../../../../core/models/catalog.model';
 import { Proveedor } from '../../../../core/models/supplier.model';
 import { Sucursal } from '../../../../core/models/branch.model';
 import { ModalComponent } from '../../../../shared/components/modal/modal.component';
+import { forkJoin, of } from 'rxjs';
+import { PaginationComponent } from '../../../../shared/components/pagination/pagination.component';
 import { CurrencyFormatPipe } from '../../../../shared/pipes/currency-format.pipe';
 import { StatusBadgePipe } from '../../../../shared/pipes/status-badge.pipe';
 
@@ -17,12 +19,13 @@ export interface VariantStockRow {
   talla_id: number | null;
   color_id: number;
   cantidad: number;
+  costo_variante?: number | null;
 }
 
 @Component({
   selector: 'app-products',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, ModalComponent, CurrencyFormatPipe, StatusBadgePipe],
+  imports: [CommonModule, ReactiveFormsModule, ModalComponent, PaginationComponent, CurrencyFormatPipe, StatusBadgePipe],
   template: `
     <div class="page-container animate-fade-in">
       <!-- Toolbar -->
@@ -45,6 +48,13 @@ export interface VariantStockRow {
               @for (cat of categories(); track cat.id) {
                 <option [value]="cat.id">{{ cat.nombre }}</option>
               }
+            </select>
+
+            <select class="form-control select-filter" [value]="selectedGenderFilter()" (change)="onGenderFilterChange($event)">
+              <option value="">Todos los Géneros</option>
+              <option value="HOMBRE">Hombre</option>
+              <option value="MUJER">Mujer</option>
+              <option value="UNISEX">Unisex</option>
             </select>
 
             <select class="form-control select-filter" [value]="selectedStatusFilter()" (change)="onStatusFilterChange($event)">
@@ -82,10 +92,12 @@ export interface VariantStockRow {
               <tr>
                 <th>SKU</th>
                 <th>Prenda / Producto</th>
+                <th>Género</th>
                 <th>Categoría</th>
                 <th>Temporada</th>
                 <th>Proveedor</th>
                 <th>Precio</th>
+                <th>Costo / Margen</th>
                 <th>Estado</th>
                 <th class="text-right">Acciones</th>
               </tr>
@@ -93,20 +105,20 @@ export interface VariantStockRow {
             <tbody>
               @if (isLoading()) {
                 <tr>
-                  <td colspan="8" class="text-center py-8">
+                  <td colspan="9" class="text-center py-8">
                     <i class="ri-loader-4-line spin-icon text-2xl text-accent"></i>
                     <p class="text-muted mt-2">Cargando catálogo de productos...</p>
                   </td>
                 </tr>
               } @else if (filteredProducts().length === 0) {
                 <tr>
-                  <td colspan="8" class="text-center py-8 text-muted">
+                  <td colspan="9" class="text-center py-8 text-muted">
                     <i class="ri-t-shirt-2-line text-3xl mb-2"></i>
                     <p>No se encontraron productos registrados con los filtros seleccionados.</p>
                   </td>
                 </tr>
               } @else {
-                @for (product of filteredProducts(); track product.id) {
+                @for (product of paginatedProducts(); track product.id) {
                   <tr>
                     <td>
                       <span class="sku-badge">{{ product.sku }}</span>
@@ -127,6 +139,11 @@ export interface VariantStockRow {
                       </div>
                     </td>
                     <td>
+                      <span class="badge" [ngClass]="product.genero === 'HOMBRE' ? 'badge-primary' : (product.genero === 'MUJER' ? 'badge-accent' : 'badge-secondary')">
+                        {{ product.genero || 'UNISEX' }}
+                      </span>
+                    </td>
+                    <td>
                       <span class="badge badge-primary">{{ product.categoria?.nombre || getCategoryName(product.categoria_id) }}</span>
                     </td>
                     <td>
@@ -137,6 +154,12 @@ export interface VariantStockRow {
                     </td>
                     <td>
                       <span class="font-bold text-primary">{{ product.precio | currencyFormat }}</span>
+                    </td>
+                    <td>
+                      <span class="text-xs font-medium">{{ (product.costo_compra ?? 0) | currencyFormat }}</span>
+                      <div class="text-xs" [style.color]="(product.precio - (product.costo_compra ?? 0)) < 0 ? 'var(--error)' : 'var(--text-muted)'">
+                        {{ product.precio > 0 ? (((product.precio - (product.costo_compra ?? 0)) / product.precio * 100) | number:'1.0-0') : '0' }}% margen
+                      </div>
                     </td>
                     <td>
                       <span class="badge" [ngClass]="(product.estado | statusBadge).class">
@@ -165,6 +188,16 @@ export interface VariantStockRow {
             </tbody>
           </table>
         </div>
+
+        <!-- Paginación de Productos -->
+        <app-pagination
+          [currentPage]="currentPage()"
+          [totalItems]="filteredProducts().length"
+          [pageSize]="pageSize()"
+          [pageSizeOptions]="[5, 10, 20, 50]"
+          (pageChange)="onPageChange($event)"
+          (pageSizeChange)="onPageSizeChange($event)"
+        ></app-pagination>
       </div>
 
       <!-- Create / Edit Product Modal -->
@@ -190,14 +223,35 @@ export interface VariantStockRow {
           </div>
 
           <div class="form-group">
-            <label class="form-label" for="p-desc">Descripción Detallada <span class="required">*</span></label>
+            <label class="form-label" for="p-desc">Descripción Detallada <span class="optional-hint">(opcional)</span></label>
             <textarea id="p-desc" rows="2" formControlName="descripcion" class="form-control" placeholder="Composición 100% algodón peinado, corte ajustado..."></textarea>
           </div>
 
-          <div class="grid grid-cols-3 form-row">
+          <div class="grid grid-cols-4 form-row">
             <div class="form-group">
               <label class="form-label" for="p-precio">Precio Unitario (Bs.) <span class="required">*</span></label>
               <input id="p-precio" type="number" step="0.50" formControlName="precio" class="form-control" placeholder="189.00">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="p-costo">Costo Compra (Bs.) <span class="required">*</span></label>
+              <input id="p-costo" type="number" step="0.50" min="0" formControlName="costo_compra" class="form-control" placeholder="90.00" title="Lo que te costó al proveedor. Vacío en variantes = hereda este valor">
+              @if (productForm.get('precio')?.value && productForm.get('costo_compra')?.value !== null) {
+                <small class="text-xs" [style.color]="(productForm.get('precio')?.value - productForm.get('costo_compra')?.value) < 0 ? 'var(--error)' : 'var(--text-muted)'">
+                  Margen: Bs. {{ (productForm.get('precio')?.value - productForm.get('costo_compra')?.value) | number:'1.2-2' }}
+                  ({{ productForm.get('precio')?.value > 0 ? ((productForm.get('precio')?.value - productForm.get('costo_compra')?.value) / productForm.get('precio')?.value * 100 | number:'1.1-1') : '0' }}%)
+                  @if ((productForm.get('precio')?.value - productForm.get('costo_compra')?.value) < 0) { — ¡Vendes a pérdida! }
+                </small>
+              }
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="p-genero">Género</label>
+              <select id="p-genero" formControlName="genero" class="form-control">
+                <option value="HOMBRE">Hombre</option>
+                <option value="MUJER">Mujer</option>
+                <option value="UNISEX">Unisex</option>
+              </select>
             </div>
 
             <div class="form-group">
@@ -240,6 +294,23 @@ export interface VariantStockRow {
                 <option value="PROXIMO_INGRESO">PRÓXIMO INGRESO</option>
               </select>
             </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Colecciones</label>
+            @if (collections().length === 0) {
+              <small class="text-xs text-muted">Aún no hay colecciones. Créalas en Características de Producto.</small>
+            } @else {
+              <div class="collections-checklist">
+                @for (col of collections(); track col.id) {
+                  <label class="check-item">
+                    <input type="checkbox" [checked]="isCollectionSelected(col.id)" (change)="toggleCollection(col.id)" />
+                    <span>{{ col.nombre }}</span>
+                  </label>
+                }
+              </div>
+              <small class="text-xs text-muted">Un producto puede pertenecer a varias colecciones.</small>
+            }
           </div>
 
           <!-- Image Upload Section -->
@@ -337,6 +408,7 @@ export interface VariantStockRow {
                         <th>Talla</th>
                         <th>Color</th>
                         <th style="width: 100px;">Cantidad</th>
+                        <th style="width: 110px;">Costo (Bs.)</th>
                         <th style="width: 44px; text-align: center;"></th>
                       </tr>
                     </thead>
@@ -384,6 +456,18 @@ export interface VariantStockRow {
                               min="0"
                               [value]="row.cantidad"
                               (input)="updateVariantRow(idx, 'cantidad', $any($event.target).value)"
+                            >
+                          </td>
+                          <td>
+                            <input 
+                              type="number" 
+                              class="form-control-xs" 
+                              min="0"
+                              step="0.50"
+                              [value]="row.costo_variante ?? ''"
+                              [placeholder]="productForm.get('costo_compra')?.value ?? ''"
+                              title="Vacío = hereda costo base"
+                              (input)="updateVariantRow(idx, 'costo_variante', $any($event.target).value)"
                             >
                           </td>
                           <td style="text-align: center;">
@@ -878,6 +962,29 @@ export interface VariantStockRow {
       animation: spin 1s linear infinite;
     }
 
+    .collections-checklist {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin: 0.35rem 0;
+    }
+
+    .check-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.8125rem;
+      font-weight: 600;
+      color: var(--secondary);
+      background: #f8fafc;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-full);
+      padding: 0.3rem 0.75rem;
+      cursor: pointer;
+    }
+
+    .check-item input { cursor: pointer; }
+
     @keyframes spin {
       100% { transform: rotate(360deg); }
     }
@@ -897,13 +1004,22 @@ export class ProductsComponent implements OnInit {
   public branches = signal<Sucursal[]>([]);
   public sizes = signal<Talla[]>([]);
   public colors = signal<Color[]>([]);
+  public collections = signal<Coleccion[]>([]);
+
+  /** Colecciones seleccionadas en el formulario (N:M con el producto). */
+  public selectedCollectionIds: number[] = [];
 
   public isLoading = signal<boolean>(true);
   public isSaving = signal<boolean>(false);
 
   public searchQuery = signal<string>('');
   public selectedCategoryFilter = signal<string>('');
+  public selectedGenderFilter = signal<string>('');
   public selectedStatusFilter = signal<string>('');
+
+  // Paginación
+  public currentPage = signal<number>(1);
+  public pageSize = signal<number>(10);
 
   // Modal
   public isProductModalOpen = signal<boolean>(false);
@@ -921,8 +1037,10 @@ export class ProductsComponent implements OnInit {
   public productForm: FormGroup = this.fb.group({
     sku: ['', [Validators.required, Validators.minLength(3)]],
     nombre: ['', [Validators.required, Validators.minLength(2)]],
-    descripcion: ['', [Validators.required]],
+    descripcion: [''],
     precio: [150.00, [Validators.required, Validators.min(1)]],
+    costo_compra: [90.00, [Validators.required, Validators.min(0)]],
+    genero: ['UNISEX'],
     categoria_id: [null, [Validators.required]],
     temporada_id: [null],
     proveedor_id: [null],
@@ -933,6 +1051,7 @@ export class ProductsComponent implements OnInit {
     let list = this.products();
     const query = this.searchQuery().toLowerCase().trim();
     const catFilter = this.selectedCategoryFilter();
+    const genderFilter = this.selectedGenderFilter();
     const statusFilter = this.selectedStatusFilter();
 
     if (query) {
@@ -946,11 +1065,23 @@ export class ProductsComponent implements OnInit {
       list = list.filter(p => p.categoria_id === +catFilter);
     }
 
+    if (genderFilter) {
+      list = list.filter(p => (p.genero || 'UNISEX') === genderFilter);
+    }
+
     if (statusFilter) {
       list = list.filter(p => p.estado === statusFilter);
     }
 
-    return list;
+    return [...list].sort((a, b) => b.id - a.id);
+  });
+
+  public paginatedProducts = computed(() => {
+    const list = this.filteredProducts();
+    const page = this.currentPage();
+    const size = this.pageSize();
+    const start = (page - 1) * size;
+    return list.slice(start, start + size);
   });
 
   ngOnInit(): void {
@@ -959,6 +1090,7 @@ export class ProductsComponent implements OnInit {
 
   loadAllData(): void {
     this.isLoading.set(true);
+    this.currentPage.set(1); // Resetear a página 1 para que los productos nuevos sean visibles
 
     this.catalogApi.getCategories().subscribe(c => {
       this.categories.set(c);
@@ -972,8 +1104,9 @@ export class ProductsComponent implements OnInit {
     this.branchApi.getBranches().subscribe(b => this.branches.set(b));
     this.catalogApi.getSizes().subscribe(sz => this.sizes.set(sz));
     this.catalogApi.getColors().subscribe(cl => this.colors.set(cl));
+    this.catalogApi.getCollections().subscribe(cs => this.collections.set(cs || []));
 
-    this.catalogApi.getProducts(0, 100).subscribe({
+    this.catalogApi.getProducts(0, 500).subscribe({
       next: (products) => {
         this.products.set(products);
         this.isLoading.set(false);
@@ -1003,16 +1136,34 @@ export class ProductsComponent implements OnInit {
   onSearchChange(event: Event): void {
     const val = (event.target as HTMLInputElement).value;
     this.searchQuery.set(val);
+    this.currentPage.set(1);
   }
 
   onCategoryFilterChange(event: Event): void {
     const val = (event.target as HTMLSelectElement).value;
     this.selectedCategoryFilter.set(val);
+    this.currentPage.set(1);
+  }
+
+  onGenderFilterChange(event: Event): void {
+    const val = (event.target as HTMLSelectElement).value;
+    this.selectedGenderFilter.set(val);
+    this.currentPage.set(1);
   }
 
   onStatusFilterChange(event: Event): void {
     const val = (event.target as HTMLSelectElement).value;
     this.selectedStatusFilter.set(val);
+    this.currentPage.set(1);
+  }
+
+  onPageChange(page: number): void {
+    this.currentPage.set(page);
+  }
+
+  onPageSizeChange(size: number): void {
+    this.pageSize.set(size);
+    this.currentPage.set(1);
   }
 
   // --- Métodos de Subida de Imágenes a Cloudinary ---
@@ -1145,6 +1296,8 @@ export class ProductsComponent implements OnInit {
         parsedValue = (value === '' || value === 'null' || value === null) ? null : +value;
       } else if (field === 'cantidad') {
         parsedValue = Math.max(0, parseInt(value, 10) || 0);
+      } else if (field === 'costo_variante') {
+        parsedValue = (value === '' || value === null || value === undefined) ? null : Math.max(0, parseFloat(value) || 0);
       } else {
         parsedValue = +value;
       }
@@ -1161,11 +1314,14 @@ export class ProductsComponent implements OnInit {
     this.selectedProductId.set(null);
     this.uploadedImages.set([]);
     this.primaryImageIndex.set(0);
+    this.selectedCollectionIds = [];
     this.productForm.reset({
-      sku: 'PRD-' + Math.floor(1000 + Math.random() * 9000),
+      sku: 'PRD-' + Date.now().toString().slice(-6) + Math.floor(10 + Math.random() * 90),
       nombre: '',
       descripcion: '',
       precio: 180.00,
+      costo_compra: 108.00,
+      genero: 'UNISEX',
       categoria_id: this.categories().length > 0 ? this.categories()[0].id : null,
       temporada_id: null,
       proveedor_id: null,
@@ -1185,6 +1341,11 @@ export class ProductsComponent implements OnInit {
   openEditProductModal(product: Producto): void {
     this.isEditingProduct.set(true);
     this.selectedProductId.set(product.id);
+    this.selectedCollectionIds = [];
+    this.catalogApi.getProductCollections(product.id).subscribe({
+      next: (cols) => { this.selectedCollectionIds = (cols || []).map(c => c.id); },
+      error: () => { this.selectedCollectionIds = []; }
+    });
     // Cargar imágenes existentes como isNew: false para no borrarlas al cancelar
     const existingImgs = (product.imagenes || []).map(url => ({
       url,
@@ -1198,6 +1359,8 @@ export class ProductsComponent implements OnInit {
       nombre: product.nombre,
       descripcion: product.descripcion,
       precio: product.precio,
+      costo_compra: product.costo_compra ?? 0,
+      genero: product.genero || 'UNISEX',
       categoria_id: product.categoria_id,
       temporada_id: product.temporada_id || null,
       proveedor_id: product.proveedor_id || null,
@@ -1232,12 +1395,15 @@ export class ProductsComponent implements OnInit {
     const formVal = this.productForm.value;
     // Usar getOrderedImages() para que la imagen principal sea la primera
     const imageUrls = this.getOrderedImages().map(img => img.url);
+    const coleccionesElegidas = [...this.selectedCollectionIds];
 
     if (this.isEditingProduct() && this.selectedProductId()) {
       const updateDto: ProductoUpdateDto = {
         nombre: formVal.nombre,
         descripcion: formVal.descripcion,
         precio: +formVal.precio,
+        costo_compra: formVal.costo_compra !== null && formVal.costo_compra !== undefined && formVal.costo_compra !== '' ? +formVal.costo_compra : undefined,
+        genero: formVal.genero,
         categoria_id: +formVal.categoria_id,
         temporada_id: formVal.temporada_id ? +formVal.temporada_id : undefined,
         proveedor_id: formVal.proveedor_id ? +formVal.proveedor_id : undefined,
@@ -1247,11 +1413,13 @@ export class ProductsComponent implements OnInit {
 
       this.catalogApi.updateProduct(this.selectedProductId()!, updateDto).subscribe({
         next: () => {
-          this.toast.success('Producto actualizado exitosamente.');
-          this.isSaving.set(false);
-          this.uploadedImages.set([]); // Limpia para no ejecutar cleanup al cerrar
-          this.isProductModalOpen.set(false);
-          this.loadAllData();
+          this.syncProductCollections(this.selectedProductId()!, coleccionesElegidas, () => {
+            this.toast.success('Producto actualizado exitosamente.');
+            this.isSaving.set(false);
+            this.uploadedImages.set([]); // Limpia para no ejecutar cleanup al cerrar
+            this.isProductModalOpen.set(false);
+            this.loadAllData();
+          });
         },
         error: () => this.isSaving.set(false)
       });
@@ -1260,7 +1428,8 @@ export class ProductsComponent implements OnInit {
         sucursal_id: +r.sucursal_id,
         talla_id: r.talla_id !== null ? +r.talla_id : null,
         color_id: +r.color_id,
-        cantidad: +r.cantidad || 0
+        cantidad: +r.cantidad || 0,
+        costo_variante: r.costo_variante !== null && r.costo_variante !== undefined && r.costo_variante !== ('' as any) ? +r.costo_variante : null
       }));
 
       const createDto: ProductoCreateDto = {
@@ -1268,6 +1437,8 @@ export class ProductsComponent implements OnInit {
         nombre: formVal.nombre,
         descripcion: formVal.descripcion,
         precio: +formVal.precio,
+        costo_compra: +formVal.costo_compra || 0,
+        genero: formVal.genero,
         categoria_id: +formVal.categoria_id,
         temporada_id: formVal.temporada_id ? +formVal.temporada_id : undefined,
         proveedor_id: formVal.proveedor_id ? +formVal.proveedor_id : undefined,
@@ -1277,16 +1448,61 @@ export class ProductsComponent implements OnInit {
       };
 
       this.catalogApi.createProduct(createDto).subscribe({
-        next: () => {
-          this.toast.success('Producto creado y agregado al catálogo con imágenes y existencias.');
-          this.isSaving.set(false);
-          this.uploadedImages.set([]); // Limpia para no ejecutar cleanup al cerrar
-          this.isProductModalOpen.set(false);
-          this.loadAllData();
+        next: (created) => {
+          this.syncProductCollections(created.id, coleccionesElegidas, () => {
+            this.toast.success('Producto creado y agregado al catálogo con imágenes y existencias.');
+            this.isSaving.set(false);
+            this.uploadedImages.set([]); // Limpia para no ejecutar cleanup al cerrar
+            this.isProductModalOpen.set(false);
+            this.loadAllData();
+          });
         },
         error: () => this.isSaving.set(false)
       });
     }
+  }
+
+  isCollectionSelected(id: number): boolean {
+    return this.selectedCollectionIds.includes(id);
+  }
+
+  toggleCollection(id: number): void {
+    this.selectedCollectionIds = this.isCollectionSelected(id)
+      ? this.selectedCollectionIds.filter(x => x !== id)
+      : [...this.selectedCollectionIds, id];
+  }
+
+  /**
+   * Sincroniza las colecciones del producto (agrega las nuevas, quita las desmarcadas).
+   * Al crear, el producto no tiene colecciones previas: solo agrega.
+   */
+  private syncProductCollections(productId: number, elegidas: number[], done: () => void): void {
+    this.catalogApi.getProductCollections(productId).subscribe({
+      next: (actuales) => {
+        const actualesIds = (actuales || []).map(c => c.id);
+        const agregar = elegidas.filter(id => !actualesIds.includes(id));
+        const quitar = actualesIds.filter(id => !elegidas.includes(id));
+        if (agregar.length === 0 && quitar.length === 0) {
+          done();
+          return;
+        }
+        forkJoin({
+          agregadas: agregar.length > 0
+            ? forkJoin(agregar.map(id => this.catalogApi.associateProductCollection(productId, id)))
+            : of([]),
+          quitadas: quitar.length > 0
+            ? forkJoin(quitar.map(id => this.catalogApi.removeProductCollection(productId, id)))
+            : of([])
+        }).subscribe({
+          next: () => done(),
+          error: () => {
+            this.toast.error('Producto guardado, pero hubo un error sincronizando colecciones.');
+            done();
+          }
+        });
+      },
+      error: () => done()
+    });
   }
 
   toggleProductStatus(product: Producto): void {

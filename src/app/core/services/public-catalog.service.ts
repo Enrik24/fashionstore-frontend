@@ -21,13 +21,18 @@ export class PublicCatalogService {
     let httpParams = new HttpParams();
     if (params) {
       if (params.q) httpParams = httpParams.set('q', params.q);
+      if (params.genero) httpParams = httpParams.set('genero', params.genero);
       if (params.categoria_id) httpParams = httpParams.set('categoria_id', params.categoria_id.toString());
       if (params.temporada_id) httpParams = httpParams.set('temporada_id', params.temporada_id.toString());
+      if (params.coleccion_id) httpParams = httpParams.set('coleccion_id', params.coleccion_id.toString());
       if (params.precio_min !== undefined && params.precio_min !== null) httpParams = httpParams.set('precio_min', params.precio_min.toString());
       if (params.precio_max !== undefined && params.precio_max !== null) httpParams = httpParams.set('precio_max', params.precio_max.toString());
       if (params.talla_id) httpParams = httpParams.set('talla_id', params.talla_id.toString());
       if (params.color_id) httpParams = httpParams.set('color_id', params.color_id.toString());
-      if (params.orden_por) httpParams = httpParams.set('orden_por', params.orden_por);
+      if (params.orden_por) {
+        const backendSort = params.orden_por === 'recientes' ? 'fecha' : params.orden_por;
+        httpParams = httpParams.set('orden_por', backendSort).set('ordenar_por', backendSort);
+      }
       if (params.pagina) httpParams = httpParams.set('pagina', params.pagina.toString());
       if (params.limite) httpParams = httpParams.set('limite', params.limite.toString());
     }
@@ -38,13 +43,18 @@ export class PublicCatalogService {
     let httpParams = new HttpParams();
     if (params) {
       if (params.q) httpParams = httpParams.set('q', params.q);
+      if (params.genero) httpParams = httpParams.set('genero', params.genero);
       if (params.categoria_id) httpParams = httpParams.set('categoria_id', params.categoria_id.toString());
       if (params.temporada_id) httpParams = httpParams.set('temporada_id', params.temporada_id.toString());
+      if (params.coleccion_id) httpParams = httpParams.set('coleccion_id', params.coleccion_id.toString());
       if (params.precio_min !== undefined && params.precio_min !== null) httpParams = httpParams.set('precio_min', params.precio_min.toString());
       if (params.precio_max !== undefined && params.precio_max !== null) httpParams = httpParams.set('precio_max', params.precio_max.toString());
       if (params.talla_id) httpParams = httpParams.set('talla_id', params.talla_id.toString());
       if (params.color_id) httpParams = httpParams.set('color_id', params.color_id.toString());
-      if (params.orden_por) httpParams = httpParams.set('orden_por', params.orden_por);
+      if (params.orden_por) {
+        const backendSort = params.orden_por === 'recientes' ? 'fecha' : params.orden_por;
+        httpParams = httpParams.set('orden_por', backendSort).set('ordenar_por', backendSort);
+      }
       if (params.pagina) httpParams = httpParams.set('pagina', params.pagina.toString());
       if (params.limite) httpParams = httpParams.set('limite', params.limite.toString());
     }

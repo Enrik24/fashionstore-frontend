@@ -2,10 +2,12 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { RouterTestingModule } from '@angular/router/testing';
 import { ProductCardComponent } from './product-card.component';
 import { Producto } from '../../../../core/models/catalog.model';
+import { FavoritesService } from '../../../../core/services/favorites.service';
 
 describe('ProductCardComponent', () => {
   let component: ProductCardComponent;
   let fixture: ComponentFixture<ProductCardComponent>;
+  let favoritesMock: jasmine.SpyObj<FavoritesService>;
 
   const mockProduct: Producto = {
     id: 1,
@@ -20,8 +22,12 @@ describe('ProductCardComponent', () => {
   };
 
   beforeEach(async () => {
+    favoritesMock = jasmine.createSpyObj<FavoritesService>('FavoritesService', ['isFavorite', 'toggle']);
+    favoritesMock.isFavorite.and.returnValue(false);
+
     await TestBed.configureTestingModule({
-      imports: [ProductCardComponent, RouterTestingModule]
+      imports: [ProductCardComponent, RouterTestingModule],
+      providers: [{ provide: FavoritesService, useValue: favoritesMock }]
     }).compileComponents();
 
     fixture = TestBed.createComponent(ProductCardComponent);
@@ -42,5 +48,14 @@ describe('ProductCardComponent', () => {
 
     component.product = { ...mockProduct, imagenes: [] };
     expect(component.getProductImage()).toContain('unsplash.com');
+  });
+
+  it('CU25: debe alternar el favorito al hacer clic en el corazón', () => {
+    const heartBtn = fixture.nativeElement.querySelector('.favorite-btn') as HTMLButtonElement;
+    expect(heartBtn).toBeTruthy();
+
+    heartBtn.click();
+
+    expect(favoritesMock.toggle).toHaveBeenCalledWith(1);
   });
 });

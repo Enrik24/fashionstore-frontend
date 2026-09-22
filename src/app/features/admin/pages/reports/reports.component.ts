@@ -1,9 +1,16 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { provideCharts, withDefaultRegisterables } from 'ng2-charts';
+import { ChartConfiguration } from 'chart.js';
 import { ReportsService } from '../../../../core/services/reports.service';
-import { AiService } from '../../../../core/services/ai.service';
 import { BranchApiService } from '../../../../core/services/branch-api.service';
+import { ToastService } from '../../../../core/services/toast.service';
+import { ChartCardComponent } from '../../../../shared/components/chart-card/chart-card.component';
+import { ExportButtonsComponent } from '../../../../shared/components/export-buttons/export-buttons.component';
+import { VoiceAssistantComponent } from '../../../../shared/components/voice-assistant/voice-assistant.component';
+import { CurrencyFormatPipe } from '../../../../shared/pipes/currency-format.pipe';
+import { CHART_COLORS, CHART_PALETTE, BASE_CHART_OPTIONS } from '../../../../shared/config/chart-theme';
 import {
   ReporteVentas,
   ReporteInventario,
@@ -18,7 +25,8 @@ import { Sucursal } from '../../../../core/models/branch.model';
 @Component({
   selector: 'app-reports',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, ChartCardComponent, ExportButtonsComponent, VoiceAssistantComponent, CurrencyFormatPipe],
+  providers: [provideCharts(withDefaultRegisterables())],
   template: `
     <div class="reports-container animate-fade-in">
       <!-- Header -->
@@ -28,42 +36,55 @@ import { Sucursal } from '../../../../core/models/branch.model';
           <p class="page-subtitle">Monitoreo ejecutivo, métricas operativas y análisis de negocio en tiempo real</p>
         </div>
         <div class="header-actions">
-          <button class="btn btn-secondary" (click)="exportarVentasCsv()">
-            <i class="ri-file-excel-2-line"></i> Exportar Ventas CSV
-          </button>
-          <button class="btn btn-primary" (click)="openCreateKpiModal()">
-            <i class="ri-add-line"></i> Nuevo KPI
-          </button>
+          @if (activeTab() !== 'voz_ia') {
+            <app-export-buttons [tipo]="exportTipoActual()" [filtros]="exportFiltrosActual()" />
+          }
+          @if (activeTab() === 'kpis') {
+            <button class="btn btn-primary" (click)="openCreateKpiModal()">
+              <i class="ri-add-line"></i> Nuevo KPI
+            </button>
+          }
         </div>
       </div>
 
-      <!-- Filters Bar -->
+      <!-- Filters Bar (solo los filtros que cada pestaña realmente aplica) -->
       <div class="card filter-bar">
-        <div class="filter-group">
-          <label>Fecha Inicio</label>
-          <input type="date" class="form-control" [(ngModel)]="fechaInicio" (change)="cargarDatosSegunTab()" />
-        </div>
-        <div class="filter-group">
-          <label>Fecha Fin</label>
-          <input type="date" class="form-control" [(ngModel)]="fechaFin" (change)="cargarDatosSegunTab()" />
-        </div>
-        <div class="filter-group">
-          <label>Sucursal</label>
-          <select class="form-control" [(ngModel)]="selectedSucursalId" (change)="cargarDatosSegunTab()">
-            <option [ngValue]="undefined">Todas las Sucursales</option>
-            @for (s of sucursales(); track s.id) {
-              <option [ngValue]="s.id">{{ s.nombre }} ({{ s.ciudad?.nombre || 'Central' }})</option>
-            }
-          </select>
-        </div>
-        <div class="filter-actions">
-          <button class="btn btn-secondary" (click)="resetFilters()">
-            <i class="ri-refresh-line"></i> Restablecer
-          </button>
-          <button class="btn btn-primary" (click)="cargarDatosSegunTab()">
-            <i class="ri-filter-3-line"></i> Aplicar Filtros
-          </button>
-        </div>
+        @if (mostrarFiltroFechas()) {
+          <div class="filter-group">
+            <label>Fecha Inicio</label>
+            <input type="date" class="form-control" [(ngModel)]="fechaInicio" (change)="cargarDatosSegunTab()" />
+          </div>
+          <div class="filter-group">
+            <label>Fecha Fin</label>
+            <input type="date" class="form-control" [(ngModel)]="fechaFin" (change)="cargarDatosSegunTab()" />
+          </div>
+        }
+        @if (mostrarFiltroSucursal()) {
+          <div class="filter-group">
+            <label>Sucursal</label>
+            <select class="form-control" [(ngModel)]="selectedSucursalId" (change)="cargarDatosSegunTab()">
+              <option [ngValue]="undefined">Todas las Sucursales</option>
+              @for (s of sucursales(); track s.id) {
+                <option [ngValue]="s.id">{{ s.nombre }} ({{ s.ciudad?.nombre || 'Central' }})</option>
+              }
+            </select>
+          </div>
+        }
+        @if (notaFiltros()) {
+          <div class="filter-note">
+            <i class="ri-information-line"></i> {{ notaFiltros() }}
+          </div>
+        }
+        @if (mostrarFiltroFechas() || mostrarFiltroSucursal()) {
+          <div class="filter-actions">
+            <button class="btn btn-secondary" (click)="resetFilters()">
+              <i class="ri-refresh-line"></i> Restablecer
+            </button>
+            <button class="btn btn-primary" (click)="cargarDatosSegunTab()">
+              <i class="ri-filter-3-line"></i> Aplicar Filtros
+            </button>
+          </div>
+        }
       </div>
 
       <!-- Navigation Tabs -->
@@ -271,8 +292,22 @@ import { Sucursal } from '../../../../core/models/branch.model';
                 </div>
               </div>
 
+              <div class="grid-2-col mt-4">
+                <app-chart-card title="Top productos" icon="ri-trophy-line" [type]="topProductosChart().type"
+                  [data]="topProductosChart().data" [options]="topProductosChart().options" [status]="ventasChartStatus()" (retry)="cargarReporteVentas()" />
+                <app-chart-card title="Mix online vs presencial" icon="ri-pie-chart-line" [type]="'doughnut'"
+                  [data]="mixCanalChart().data" [options]="mixCanalChart().options" [status]="ventasChartStatus()" (retry)="cargarReporteVentas()" />
+              </div>
+
+              @if ((reporteVentas()?.serie_diaria?.length || 0) > 0) {
+                <div class="mt-4">
+                  <app-chart-card title="Evolución de ingresos por día" icon="ri-line-chart-line" [type]="serieChart().type"
+                    [data]="serieChart().data" [options]="serieChart().options" [status]="ventasChartStatus()" (retry)="cargarReporteVentas()" />
+                </div>
+              }
+
               <!-- Distribución por Canal -->
-              <div class="card">
+              <div class="card mt-4">
                 <h3 class="card-subtitle"><i class="ri-pie-chart-line text-primary"></i> Distribución por Canal de Venta</h3>
                 <div class="channel-breakdown mt-3">
                   <div class="category-stat-item">
@@ -338,11 +373,11 @@ import { Sucursal } from '../../../../core/models/branch.model';
                   <tbody>
                     @for (inv of reporteInventario()?.inventario || []; track inv.inventario_id) {
                       <tr>
-                        <td class="font-medium">{{ inv.producto_nombre }}</td>
-                        <td><span class="sku-tag">{{ inv.sku }}</span></td>
+                        <td class="font-medium">{{ inv.producto_nombre || 'Sin producto' }}</td>
+                        <td><span class="sku-tag">{{ inv.sku || '—' }}</span></td>
                         <td>{{ inv.talla || '-' }}</td>
                         <td>{{ inv.color || '-' }}</td>
-                        <td>{{ inv.sucursal || 'Central' }}</td>
+                        <td>{{ inv.sucursal || '-' }}</td>
                         <td class="font-bold">{{ inv.cantidad_disponible }}</td>
                         <td>{{ inv.cantidad_reservada || 0 }}</td>
                         <td>{{ inv.cantidad_minima }}</td>
@@ -360,6 +395,12 @@ import { Sucursal } from '../../../../core/models/branch.model';
                   </tbody>
                 </table>
               </div>
+              @if ((reporteInventario()?.total_items_registrados || 0) > (reporteInventario()?.inventario?.length || 0)) {
+                <p class="text-muted text-center py-2 table-footer-hint">
+                  Mostrando {{ reporteInventario()?.inventario?.length || 0 }} de {{ reporteInventario()?.total_items_registrados || 0 }} registros.
+                  Descarga el reporte para ver el detalle completo.
+                </p>
+              }
             </div>
           </div>
         }
@@ -373,11 +414,11 @@ import { Sucursal } from '../../../../core/models/branch.model';
                 <span class="metric-big">{{ reporteReservas()?.total_reservas || 0 }}</span>
               </div>
               <div class="card metric-box">
-                <span class="metric-title">Tasa de Conversión (Recogidas)</span>
+                <span class="metric-title">Tasa de Conversión (Completadas)</span>
                 <span class="metric-big text-success">{{ (reporteReservas()?.tasa_conversion_recogida_pct || 0) | number:'1.1-1' }}%</span>
               </div>
               <div class="card metric-box">
-                <span class="metric-title">Monto Total Convertido</span>
+                <span class="metric-title">Monto Convertido (Precio Catálogo)</span>
                 <span class="metric-big text-primary">Bs. {{ (reporteReservas()?.monto_total_convertido || 0) | number:'1.2-2' }}</span>
               </div>
             </div>
@@ -431,7 +472,7 @@ import { Sucursal } from '../../../../core/models/branch.model';
                     @for (c of reporteClientes()?.top_10_clientes || []; track c.cliente_id) {
                       <tr>
                         <td class="font-medium">{{ c.nombre }}</td>
-                        <td>{{ c.email }}</td>
+                        <td>{{ c.correo || c.email || '—' }}</td>
                         <td>{{ c.total_pedidos }} pedidos</td>
                         <td class="text-right font-bold text-success">Bs. {{ c.total_gastado | number:'1.2-2' }}</td>
                       </tr>
@@ -454,13 +495,19 @@ import { Sucursal } from '../../../../core/models/branch.model';
                 <span class="metric-big text-primary">Bs. {{ (reporteFinanciero()?.ingresos?.total_recaudado || 0) | number:'1.2-2' }}</span>
               </div>
               <div class="card metric-box">
-                <span class="metric-title">Beneficio Estimado (Margen 40%)</span>
-                <span class="metric-big text-success">Bs. {{ (reporteFinanciero()?.beneficio_estimado_margen_40pct || 0) | number:'1.2-2' }}</span>
+                <span class="metric-title">{{ reporteFinanciero()?.beneficio_real !== undefined && reporteFinanciero()?.beneficio_real !== null ? 'Beneficio Real' : 'Beneficio Estimado (Margen 40%)' }}</span>
+                <span class="metric-big text-success">Bs. {{ ((reporteFinanciero()?.beneficio_real ?? reporteFinanciero()?.beneficio_estimado_margen_40pct) || 0) | number:'1.2-2' }}</span>
+                @if (reporteFinanciero()?.beneficio_real !== undefined && reporteFinanciero()?.beneficio_real !== null) {
+                  <small class="text-xs text-muted">Costo Bs. {{ (reporteFinanciero()?.costo_total_bienes || 0) | number:'1.2-2' }} · Margen {{ (reporteFinanciero()?.margen_real_pct || 0) | number:'1.1-1' }}% · Est. 40%: Bs. {{ (reporteFinanciero()?.beneficio_estimado_margen_40pct || 0) | number:'1.2-2' }}</small>
+                } @else {
+                  <small class="text-xs text-muted">Carga costos en Productos para ver beneficio real</small>
+                }
               </div>
             </div>
 
             <div class="card mt-4">
               <h3 class="card-subtitle"><i class="ri-bank-card-line text-info"></i> Desglose por Método de Pago</h3>
+              <p class="text-xs text-muted">Incluye pagos digitales confirmados y ventas presenciales de caja.</p>
               <div class="mt-3">
                 @for (entry of getDesgloseMetodosPago(); track entry.key) {
                   <div class="category-stat-item mb-3">
@@ -483,53 +530,7 @@ import { Sucursal } from '../../../../core/models/branch.model';
         <!-- TAB 7: REPORTE POR VOZ IA -->
         @if (activeTab() === 'voz_ia') {
           <div class="tab-content">
-            <div class="card voice-card">
-              <div class="voice-header">
-                <div class="voice-icon-box" [class.pulsing]="isRecording()">
-                  <i class="ri-mic-line"></i>
-                </div>
-                <div>
-                  <h3 class="text-xl font-bold">Generador de Reportes por Comando de Voz con IA</h3>
-                  <p class="text-muted">Dicta una consulta gerencial por micrófono o escribe tu pregunta en lenguaje natural.</p>
-                </div>
-              </div>
-
-              <div class="voice-input-container mt-4">
-                <div class="input-with-actions">
-                  <textarea class="form-control voice-textarea" 
-                            [(ngModel)]="voicePrompt" 
-                            placeholder="Ejemplo: 'Muéstrame el resumen de ventas de esta semana y las prendas con mayor rotación'"></textarea>
-                </div>
-                <div class="voice-buttons mt-3">
-                  <button class="btn btn-secondary" (click)="toggleVoiceRecording()">
-                    <i [class]="isRecording() ? 'ri-mic-off-line text-danger' : 'ri-mic-line'"></i>
-                    {{ isRecording() ? 'Detener Dictado' : 'Hablar por Micrófono' }}
-                  </button>
-                  <button class="btn btn-primary" [disabled]="!voicePrompt || aiLoading()" (click)="ejecutarReporteVoz()">
-                    @if (aiLoading()) {
-                      <i class="ri-loader-4-line ri-spin"></i> Analizando con IA...
-                    } @else {
-                      <i class="ri-sparkling-line"></i> Generar Reporte con IA
-                    }
-                  </button>
-                </div>
-              </div>
-
-              <!-- AI Generated Result -->
-              @if (voiceResult()) {
-                <div class="ai-result-box mt-4 animate-fade-in">
-                  <div class="ai-badge">
-                    <i class="ri-sparkling-fill"></i> Reporte Generado por IA ({{ voiceResult()?.tipo_reporte }})
-                  </div>
-                  <div class="ai-summary mt-2">
-                    <p class="font-medium text-lg">{{ voiceResult()?.resumen }}</p>
-                  </div>
-                  <div class="ai-raw-data mt-3">
-                    <pre>{{ voiceResult()?.datos | json }}</pre>
-                  </div>
-                </div>
-              }
-            </div>
+            <app-voice-assistant (tabChange)="desdeVoz($event)" />
           </div>
         }
       }
@@ -640,6 +641,18 @@ import { Sucursal } from '../../../../core/models/branch.model';
       letter-spacing: 0.05em;
     }
     .filter-actions { display: flex; gap: 0.5rem; }
+    .table-footer-hint { font-size: 0.78rem; }
+    .filter-note {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.82rem;
+      color: var(--text-muted, #64748b);
+      background: #f8fafc;
+      border: 1px dashed var(--border-color, #e2e8f0);
+      border-radius: 8px;
+      padding: 0.55rem 0.9rem;
+    }
     .tabs-nav {
       display: flex;
       gap: 0.5rem;
@@ -804,56 +817,6 @@ import { Sucursal } from '../../../../core/models/branch.model';
     .badge-success { background: #dcfce7; color: #166534; }
     .badge-danger { background: #fee2e2; color: #991b1b; }
     .badge-neutral { background: #f1f5f9; color: #475569; }
-    .voice-card { padding: 2rem; background: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; }
-    .voice-header { display: flex; gap: 1.25rem; align-items: center; }
-    .voice-icon-box {
-      width: 56px;
-      height: 56px;
-      background: #eff6ff;
-      color: #2563eb;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 1.75rem;
-    }
-    .voice-icon-box.pulsing {
-      animation: pulse-ring 1.5s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
-      background: #fee2e2;
-      color: #dc2626;
-    }
-    @keyframes pulse-ring {
-      0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.7); }
-      70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(220, 38, 38, 0); }
-      100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
-    }
-    .voice-textarea { min-height: 100px; resize: vertical; }
-    .voice-buttons { display: flex; gap: 0.75rem; }
-    .ai-result-box {
-      background: #f8fafc;
-      border: 1px solid #cbd5e1;
-      border-radius: 12px;
-      padding: 1.25rem;
-    }
-    .ai-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.35rem;
-      background: #818cf8;
-      color: #ffffff;
-      padding: 0.25rem 0.6rem;
-      border-radius: 20px;
-      font-size: 0.75rem;
-      font-weight: 600;
-    }
-    .ai-raw-data pre {
-      background: #1e293b;
-      color: #f8fafc;
-      padding: 1rem;
-      border-radius: 8px;
-      overflow-x: auto;
-      font-size: 0.8125rem;
-    }
     .loading-state {
       display: flex;
       flex-direction: column;
@@ -912,13 +875,11 @@ import { Sucursal } from '../../../../core/models/branch.model';
 })
 export class ReportsComponent implements OnInit {
   private reportsService = inject(ReportsService);
-  private aiService = inject(AiService);
   private branchService = inject(BranchApiService);
+  private toast = inject(ToastService);
 
   activeTab = signal<'kpis' | 'ventas' | 'inventario' | 'reservas' | 'clientes' | 'financiero' | 'voz_ia'>('kpis');
   loading = signal<boolean>(false);
-  aiLoading = signal<boolean>(false);
-  isRecording = signal<boolean>(false);
   showKpiModal = signal<boolean>(false);
 
   fechaInicio: string = '';
@@ -934,8 +895,71 @@ export class ReportsComponent implements OnInit {
   reporteClientes = signal<ReporteClientes | null>(null);
   reporteFinanciero = signal<ReporteFinanciero | null>(null);
 
-  voicePrompt: string = '';
-  voiceResult = signal<any>(null);
+  exportTipoActual = computed<'ventas' | 'inventario' | 'reservas' | 'clientes' | 'financiero' | 'kpis' | 'bitacora'>(() => {
+    const t = this.activeTab();
+    return (t === 'voz_ia' ? 'ventas' : t) as any;
+  });
+  exportFiltrosActual = computed(() => ({
+    fechaInicio: this.fechaInicio || undefined,
+    fechaFin: this.fechaFin || undefined,
+    sucursalId: this.selectedSucursalId
+  }));
+
+  topProductosChart = computed<ChartConfiguration<'bar'>>(() => {
+    const top = (this.reporteVentas()?.top_productos ?? []).slice(0, 10);
+    return { type: 'bar',
+      data: { labels: top.map(t => t.nombre),
+        datasets: [{ label: 'Unidades', data: top.map(t => t.unidades_vendidas), backgroundColor: CHART_COLORS.accent, borderRadius: 6 }] },
+      options: { ...BASE_CHART_OPTIONS, indexAxis: 'y', plugins: { ...BASE_CHART_OPTIONS.plugins, legend: { display: false } } } as any };
+  });
+  mixCanalChart = computed<ChartConfiguration<'doughnut'>>(() => ({
+    type: 'doughnut',
+    data: { labels: ['Online', 'Presencial'],
+      datasets: [{ data: [this.reporteVentas()?.resumen?.total_online ?? 0, this.reporteVentas()?.resumen?.total_presencial ?? 0],
+        backgroundColor: [CHART_COLORS.accent, CHART_COLORS.info], borderWidth: 0 }] },
+    options: { ...BASE_CHART_OPTIONS, cutout: '62%' } as any
+  }));
+  ventasChartStatus = computed<'loading' | 'success' | 'empty' | 'error'>(() => {
+    if (this.loading() && this.activeTab() === 'ventas') return 'loading';
+    const r = this.reporteVentas();
+    if (!r) return this.activeTab() === 'ventas' ? 'empty' : 'success';
+    return (r.resumen.total_recaudado ?? 0) === 0 && !(r.top_productos?.length) ? 'empty' : 'success';
+  });
+  serieChart = computed<ChartConfiguration<'line'>>(() => {
+    const serie = this.reporteVentas()?.serie_diaria ?? [];
+    return { type: 'line',
+      data: { labels: serie.map(s => s.fecha),
+        datasets: [
+          { label: 'Total', data: serie.map(s => s.total), borderColor: CHART_COLORS.accent, backgroundColor: CHART_COLORS.accent, tension: 0.35, fill: false },
+          { label: 'Online', data: serie.map(s => s.online), borderColor: CHART_COLORS.info, backgroundColor: CHART_COLORS.info, tension: 0.35, fill: false },
+          { label: 'Presencial', data: serie.map(s => s.presencial), borderColor: CHART_COLORS.success, backgroundColor: CHART_COLORS.success, tension: 0.35, fill: false }
+        ] },
+      options: { ...BASE_CHART_OPTIONS } as any };
+  });
+
+  /** Filtros que cada pestaña aplica de verdad (el resto se oculta con aviso). */
+  mostrarFiltroFechas(): boolean {
+    return this.activeTab() === 'ventas' || this.activeTab() === 'reservas' || this.activeTab() === 'financiero';
+  }
+  mostrarFiltroSucursal(): boolean {
+    return this.activeTab() === 'ventas' || this.activeTab() === 'inventario'
+      || this.activeTab() === 'reservas' || this.activeTab() === 'financiero';
+  }
+  notaFiltros(): string | null {
+    if (this.activeTab() === 'kpis') return 'Vista global de los últimos 30 días: los filtros no aplican a esta pestaña.';
+    if (this.activeTab() === 'clientes') return 'Vista global de clientes: los filtros no aplican a esta pestaña.';
+    if (this.activeTab() === 'inventario') return 'El inventario es una foto actual: el filtro de fechas no aplica.';
+    return null;
+  }
+
+  /** Salto desde el asistente de voz aplicando los filtros inferidos por la IA. */
+  desdeVoz(ev: { tab: 'ventas' | 'inventario' | 'reservas' | 'clientes' | 'financiero'; filtros: any }): void {
+    const f = ev?.filtros || {};
+    if (f.fechaInicio) this.fechaInicio = String(f.fechaInicio).slice(0, 10);
+    if (f.fechaFin) this.fechaFin = String(f.fechaFin).slice(0, 10);
+    if (f.sucursalId !== undefined && f.sucursalId !== null) this.selectedSucursalId = Number(f.sucursalId);
+    this.setTab(ev.tab);
+  }
 
   newKpi: Partial<KPIItem> = {
     nombre: '',
@@ -947,13 +971,10 @@ export class ReportsComponent implements OnInit {
     periodo: 'Mensual'
   };
 
-  private recognition: any;
-
   ngOnInit(): void {
     this.cargarSucursales();
     this.cargarKpiDashboard();
     this.cargarKpiList();
-    this.initSpeechRecognition();
   }
 
   setTab(tab: 'kpis' | 'ventas' | 'inventario' | 'reservas' | 'clientes' | 'financiero' | 'voz_ia') {
@@ -993,7 +1014,7 @@ export class ReportsComponent implements OnInit {
         this.kpiDashboard.set(data);
         this.loading.set(false);
       },
-      error: () => this.loading.set(false)
+      error: () => { this.loading.set(false); this.toast.error('No se pudieron cargar los datos', 'Reportes'); }
     });
   }
 
@@ -1006,12 +1027,12 @@ export class ReportsComponent implements OnInit {
 
   cargarReporteVentas() {
     this.loading.set(true);
-    this.reportsService.getSalesReport(this.fechaInicio, this.fechaFin, this.selectedSucursalId).subscribe({
+    this.reportsService.getSalesReport(this.fechaInicio, this.fechaFin, this.selectedSucursalId, true).subscribe({
       next: (data) => {
         this.reporteVentas.set(data);
         this.loading.set(false);
       },
-      error: () => this.loading.set(false)
+      error: () => { this.loading.set(false); this.toast.error('No se pudieron cargar los datos', 'Reportes'); }
     });
   }
 
@@ -1022,7 +1043,7 @@ export class ReportsComponent implements OnInit {
         this.reporteInventario.set(data);
         this.loading.set(false);
       },
-      error: () => this.loading.set(false)
+      error: () => { this.loading.set(false); this.toast.error('No se pudieron cargar los datos', 'Reportes'); }
     });
   }
 
@@ -1033,7 +1054,7 @@ export class ReportsComponent implements OnInit {
         this.reporteReservas.set(data);
         this.loading.set(false);
       },
-      error: () => this.loading.set(false)
+      error: () => { this.loading.set(false); this.toast.error('No se pudieron cargar los datos', 'Reportes'); }
     });
   }
 
@@ -1044,32 +1065,18 @@ export class ReportsComponent implements OnInit {
         this.reporteClientes.set(data);
         this.loading.set(false);
       },
-      error: () => this.loading.set(false)
+      error: () => { this.loading.set(false); this.toast.error('No se pudieron cargar los datos', 'Reportes'); }
     });
   }
 
   cargarReporteFinanciero() {
     this.loading.set(true);
-    this.reportsService.getFinancialReport(this.fechaInicio, this.fechaFin).subscribe({
+    this.reportsService.getFinancialReport(this.fechaInicio, this.fechaFin, this.selectedSucursalId).subscribe({
       next: (data) => {
         this.reporteFinanciero.set(data);
         this.loading.set(false);
       },
-      error: () => this.loading.set(false)
-    });
-  }
-
-  exportarVentasCsv() {
-    this.reportsService.exportSalesReportCsv(this.fechaInicio, this.fechaFin).subscribe({
-      next: (blob) => {
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `reporte_ventas_${new Date().toISOString().split('T')[0]}.csv`;
-        a.click();
-        window.URL.revokeObjectURL(url);
-      },
-      error: (err) => console.error('Error al exportar CSV', err)
+      error: () => { this.loading.set(false); this.toast.error('No se pudieron cargar los datos', 'Reportes'); }
     });
   }
 
@@ -1132,58 +1139,5 @@ export class ReportsComponent implements OnInit {
   calcularPorcentaje(val?: number, total?: number): number {
     if (!val || !total || total <= 0) return 0;
     return Math.min(100, Math.round((val / total) * 100));
-  }
-
-  initSpeechRecognition() {
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (SpeechRecognition) {
-      this.recognition = new SpeechRecognition();
-      this.recognition.lang = 'es-BO';
-      this.recognition.continuous = false;
-      this.recognition.interimResults = false;
-
-      this.recognition.onresult = (event: any) => {
-        const transcript = event.results[0][0].transcript;
-        this.voicePrompt = transcript;
-        this.isRecording.set(false);
-      };
-
-      this.recognition.onerror = () => {
-        this.isRecording.set(false);
-      };
-
-      this.recognition.onend = () => {
-        this.isRecording.set(false);
-      };
-    }
-  }
-
-  toggleVoiceRecording() {
-    if (!this.recognition) {
-      alert('Tu navegador no soporta reconocimiento de voz nativo. Por favor escribe tu comando.');
-      return;
-    }
-    if (this.isRecording()) {
-      this.recognition.stop();
-      this.isRecording.set(false);
-    } else {
-      this.recognition.start();
-      this.isRecording.set(true);
-    }
-  }
-
-  ejecutarReporteVoz() {
-    if (!this.voicePrompt) return;
-    this.aiLoading.set(true);
-    this.aiService.generateVoiceReport(this.voicePrompt).subscribe({
-      next: (res) => {
-        this.voiceResult.set(res);
-        this.aiLoading.set(false);
-      },
-      error: (err) => {
-        console.error('Error al generar reporte de voz', err);
-        this.aiLoading.set(false);
-      }
-    });
   }
 }

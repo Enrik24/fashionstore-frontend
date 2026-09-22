@@ -3,6 +3,7 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { Ciudad, CiudadCreateDto, CiudadUpdateDto, Sucursal, SucursalCreateDto, SucursalUpdateDto } from '../models/branch.model';
+import { Inventario } from '../models/inventory.model';
 
 @Injectable({
   providedIn: 'root'
@@ -47,6 +48,19 @@ export class BranchApiService {
 
   getBranch(id: number): Observable<Sucursal> {
     return this.http.get<Sucursal>(`${this.API_SUCURSALES_URL}/${id}`);
+  }
+
+  /**
+   * Productos/variantes con existencias (inventario) de una sucursal.
+   * Endpoint público GET /sucursales/{id}/productos (no requiere rol Administrador/Encargado,
+   * por lo que puede ser usado por el cajero desde el POS).
+   */
+  getBranchProducts(sucursalId: number, skip: number = 0, limit: number = 100): Observable<Inventario[]> {
+    const params = new HttpParams()
+      .set('skip', skip.toString())
+      .set('limit', limit.toString());
+
+    return this.http.get<Inventario[]>(`${this.API_SUCURSALES_URL}/${sucursalId}/productos`, { params });
   }
 
   createBranch(branch: SucursalCreateDto): Observable<Sucursal> {

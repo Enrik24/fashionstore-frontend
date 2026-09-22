@@ -1,14 +1,18 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink, Router } from '@angular/router';
 import { CartService } from '../../../../core/services/cart.service';
+import { CouponApiService } from '../../../../core/services/coupon-api.service';
+import { AlertService } from '../../../../core/services/alert.service';
+import { ModalComponent } from '../../../../shared/components/modal/modal.component';
 import { ItemCarrito } from '../../../../core/models/cart.model';
+import { Cupon } from '../../../../core/models/coupon.model';
 
 @Component({
   selector: 'app-cart-page',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [CommonModule, FormsModule, RouterLink, ModalComponent],
   template: `
     <div class="cart-page">
       <div class="container py-8">
@@ -140,30 +144,44 @@ import { ItemCarrito } from '../../../../core/models/cart.model';
                 <h3 class="summary-title">
                   <i class="ri-coupon-3-line"></i> Cupón de Descuento
                 </h3>
-                <div class="coupon-input-group">
-                  <input 
-                    type="text" 
-                    class="form-control" 
-                    placeholder="Código (ej. VERANO20)" 
-                    [(ngModel)]="couponCode"
-                    (keyup.enter)="applyCoupon()"
-                  />
-                  <button 
-                    class="btn btn-primary" 
-                    [disabled]="!couponCode || applyingCoupon"
-                    (click)="applyCoupon()"
-                  >
-                    @if (applyingCoupon) {
-                      <i class="ri-loader-4-line spin-icon"></i>
-                    } @else {
-                      Aplicar
-                    }
-                  </button>
-                </div>
+
                 @if (cartService.cartSignal()?.cupon) {
                   <div class="applied-coupon-badge">
                     <i class="ri-check-line"></i> Cupón activo: <strong>{{ cartService.cartSignal()?.cupon?.codigo }}</strong>
+                    <button
+                      type="button"
+                      class="remove-coupon-btn"
+                      title="Quitar cupón del carrito"
+                      [disabled]="removingCoupon"
+                      (click)="removeCoupon()"
+                    >
+                      <i class="ri-close-line"></i>
+                    </button>
                   </div>
+                } @else {
+                  <div class="coupon-input-group secondary">
+                    <input
+                      type="text"
+                      class="form-control"
+                      placeholder="Código (ej. VERANO20)"
+                      [(ngModel)]="couponCode"
+                      (keyup.enter)="applyCoupon()"
+                    />
+                    <button
+                      class="btn btn-primary"
+                      [disabled]="!couponCode || applyingCoupon"
+                      (click)="applyCoupon()"
+                    >
+                      Aplicar
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    class="link-button"
+                    (click)="openCouponsModal()"
+                  >
+                    <i class="ri-ticket-line"></i> Ver mis cupones disponibles
+                  </button>
                 }
               </div>
 
@@ -179,7 +197,12 @@ import { ItemCarrito } from '../../../../core/models/cart.model';
 
                   @if (cartService.discountSignal() > 0) {
                     <div class="summary-row discount-row">
-                      <span class="row-label">Descuento aplicado</span>
+                      <span class="row-label">
+                        Descuento aplicado
+                        @if (cartService.cartSignal()?.cupon) {
+                          <span class="coupon-code">({{ cartService.cartSignal()?.cupon?.codigo }})</span>
+                        }
+                      </span>
                       <span class="row-val">- Bs. {{ cartService.discountSignal() | number:'1.2-2' }}</span>
                     </div>
                   }
@@ -213,6 +236,55 @@ import { ItemCarrito } from '../../../../core/models/cart.model';
         }
       </div>
     </div>
+
+    <!-- CU27 (opcional): modal de cupones disponibles -->
+    <app-modal
+      [isOpen]="isCouponsModalOpen()"
+      [title]="'Mis Cupones Disponibles'"
+      [subtitle]="'Elige un cupón vigente para aplicarlo a tu compra'"
+      [icon]="'ri-coupon-3-line'"
+      [maxWidth]="'560px'"
+      (closeEvent)="closeCouponsModal()"
+    >
+      @if (loadingCoupons()) {
+        <div class="coupons-loading">
+          <i class="ri-loader-4-line spin-icon"></i>
+          <span>Cargando cupones disponibles...</span>
+        </div>
+      } @else if (availableCoupons().length === 0) {
+        <div class="coupons-empty">
+          <i class="ri-coupon-2-line"></i>
+          <span>No tienes cupones disponibles en este momento.</span>
+        </div>
+      } @else {
+        <div class="coupons-list">
+          @for (coupon of availableCoupons(); track coupon.id) {
+            <div class="coupon-row">
+              <div class="coupon-info">
+                <span class="coupon-code-text">{{ coupon.codigo }}</span>
+                @if (coupon.descripcion) {
+                  <span class="coupon-desc-text">{{ coupon.descripcion }}</span>
+                }
+                <span class="coupon-meta">
+                  {{ coupon.tipo === 'PORCENTAJE' ? coupon.valor + '% de descuento' : 'Bs. ' + coupon.valor + ' de descuento' }}
+                  · Vence {{ coupon.fecha_fin | date:'dd/MM/yyyy' }}
+                  @if ((coupon.producto_ids?.length || 0) > 0 || (coupon.categoria_ids?.length || 0) > 0) {
+                    · Solo productos seleccionados
+                  }
+                </span>
+              </div>
+              <button
+                class="btn btn-sm btn-outline-accent"
+                [disabled]="applyingCoupon"
+                (click)="applyAvailableCoupon(coupon.codigo)"
+              >
+                Usar
+              </button>
+            </div>
+          }
+        </div>
+      }
+    </app-modal>
   `,
   styles: [`
     .cart-page {
@@ -493,6 +565,92 @@ import { ItemCarrito } from '../../../../core/models/cart.model';
     .spin-icon { animation: spin 1s linear infinite; }
     @keyframes spin { 100% { transform: rotate(360deg); } }
 
+    /* CU27: estilos de cupón */
+    .applied-coupon-badge {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .remove-coupon-btn {
+      margin-left: auto;
+      border: none;
+      background: none;
+      color: inherit;
+      cursor: pointer;
+      font-size: 1rem;
+      line-height: 1;
+      padding: 0.15rem;
+      border-radius: 6px;
+
+      &:hover { background: rgba(0, 0, 0, 0.06); }
+      &:disabled { opacity: 0.5; cursor: not-allowed; }
+    }
+
+    .coupon-input-group.secondary {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .link-button {
+      border: none;
+      background: none;
+      color: var(--accent);
+      font-size: 0.8125rem;
+      font-weight: 600;
+      cursor: pointer;
+      padding: 0.4rem 0 0;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+
+      &:hover { text-decoration: underline; }
+    }
+
+    .coupon-code {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .coupons-loading, .coupons-empty {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      padding: 1.5rem 0;
+      color: var(--text-muted);
+    }
+
+    .coupons-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
+    }
+
+    .coupon-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      border: 1px dashed #cbd5e1;
+      border-radius: 10px;
+      padding: 0.75rem;
+    }
+
+    .coupon-info {
+      display: flex;
+      flex-direction: column;
+      gap: 0.15rem;
+    }
+
+    .coupon-code-text {
+      font-family: monospace;
+      font-weight: 700;
+      color: var(--primary);
+    }
+
+    .coupon-desc-text { font-size: 0.8125rem; color: #475569; }
+    .coupon-meta { font-size: 0.7rem; color: var(--text-muted); }
+
     @media (max-width: 992px) {
       .cart-grid { grid-template-columns: 1fr; }
     }
@@ -500,10 +658,18 @@ import { ItemCarrito } from '../../../../core/models/cart.model';
 })
 export class CartPageComponent implements OnInit {
   public cartService = inject(CartService);
+  private couponApi = inject(CouponApiService);
+  private alertService = inject(AlertService);
   private router = inject(Router);
 
   public couponCode: string = '';
   public applyingCoupon: boolean = false;
+  public removingCoupon: boolean = false;
+
+  /** CU27 (opcional): modal de cupones disponibles. */
+  public isCouponsModalOpen = signal<boolean>(false);
+  public availableCoupons = signal<Cupon[]>([]);
+  public loadingCoupons = signal<boolean>(false);
   readonly DEFAULT_PRODUCT_IMAGE = 'https://images.unsplash.com/photo-1489987707025-afc232f7ea0f?q=80&w=400&auto=format&fit=crop';
 
   ngOnInit(): void {
@@ -534,8 +700,12 @@ export class CartPageComponent implements OnInit {
     this.cartService.removeItem(item.id).subscribe();
   }
 
-  clearCart(): void {
-    if (confirm('¿Estás seguro de que deseas vaciar tu carrito?')) {
+  async clearCart(): Promise<void> {
+    const confirmed = await this.alertService.deleteConfirm(
+      '¿Vaciar Carrito?',
+      'Se eliminarán todas las prendas añadidas a tu carrito.'
+    );
+    if (confirmed) {
       this.cartService.clearCart().subscribe();
     }
   }
@@ -547,10 +717,50 @@ export class CartPageComponent implements OnInit {
       next: () => {
         this.applyingCoupon = false;
         this.couponCode = '';
+        this.closeCouponsModal();
       },
       error: () => {
         this.applyingCoupon = false;
       }
     });
+  }
+
+  /** CU27: quita el cupón aplicado y restaura el total original. */
+  removeCoupon(): void {
+    this.removingCoupon = true;
+    this.cartService.removeCoupon().subscribe({
+      next: () => {
+        this.removingCoupon = false;
+      },
+      error: () => {
+        this.removingCoupon = false;
+      }
+    });
+  }
+
+  /** CU27 (opcional): abre el modal con los cupones vigentes del cliente. */
+  openCouponsModal(): void {
+    this.isCouponsModalOpen.set(true);
+    this.loadingCoupons.set(true);
+    this.couponApi.getAvailableCoupons().subscribe({
+      next: (cupones) => {
+        this.availableCoupons.set(cupones || []);
+        this.loadingCoupons.set(false);
+      },
+      error: () => {
+        this.availableCoupons.set([]);
+        this.loadingCoupons.set(false);
+      }
+    });
+  }
+
+  closeCouponsModal(): void {
+    this.isCouponsModalOpen.set(false);
+  }
+
+  /** CU27 (opcional): autocompleta el cupón seleccionado y lo aplica. */
+  applyAvailableCoupon(codigo: string): void {
+    this.couponCode = codigo;
+    this.applyCoupon();
   }
 }

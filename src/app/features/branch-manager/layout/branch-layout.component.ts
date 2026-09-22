@@ -38,6 +38,27 @@ import { BreadcrumbsComponent } from '../../../shared/components/breadcrumbs/bre
               <span>Reservas en Tienda</span>
             }
           </a>
+
+          <a routerLink="/branch/inventory" routerLinkActive="active" class="sidebar-link" title="Inventario de la Sucursal">
+            <i class="ri-archive-line"></i>
+            @if (!isSidebarCollapsed()) {
+              <span>Inventario</span>
+            }
+          </a>
+
+          <a routerLink="/branch/sales" routerLinkActive="active" class="sidebar-link" title="Ventas de la Sucursal (online y presenciales)">
+            <i class="ri-shopping-bag-3-line"></i>
+            @if (!isSidebarCollapsed()) {
+              <span>Ventas</span>
+            }
+          </a>
+
+          <a routerLink="/branch/returns" routerLinkActive="active" class="sidebar-link" title="Devoluciones y Cambios (CU28)">
+            <i class="ri-arrow-go-back-line"></i>
+            @if (!isSidebarCollapsed()) {
+              <span>Devoluciones</span>
+            }
+          </a>
         </nav>
 
         <div class="sidebar-footer">

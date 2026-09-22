@@ -38,6 +38,10 @@ export class CatalogApiService {
     return this.http.post<Categoria>(`${this.API_URL}/categorias/`, category);
   }
 
+  updateCategory(id: number, category: Partial<CategoriaCreateDto>): Observable<Categoria> {
+    return this.http.put<Categoria>(`${this.API_URL}/categorias/${id}`, category);
+  }
+
   deleteCategory(id: number): Observable<{ message: string }> {
     return this.http.delete<{ message: string }>(`${this.API_URL}/categorias/${id}`);
   }
@@ -57,12 +61,28 @@ export class CatalogApiService {
     return this.http.post<Talla>(`${this.API_URL}/tallas/`, data);
   }
 
+  updateSize(id: number, data: Partial<TallaCreateDto>): Observable<Talla> {
+    return this.http.put<Talla>(`${this.API_URL}/tallas/${id}`, data);
+  }
+
+  deleteSize(id: number): Observable<{ message: string }> {
+    return this.http.delete<{ message: string }>(`${this.API_URL}/tallas/${id}`);
+  }
+
   getColors(): Observable<Color[]> {
     return this.http.get<Color[]>(`${this.API_URL}/colores/`);
   }
 
   createColor(data: ColorCreateDto): Observable<Color> {
     return this.http.post<Color>(`${this.API_URL}/colores/`, data);
+  }
+
+  updateColor(id: number, data: Partial<ColorCreateDto>): Observable<Color> {
+    return this.http.put<Color>(`${this.API_URL}/colores/${id}`, data);
+  }
+
+  deleteColor(id: number): Observable<{ message: string }> {
+    return this.http.delete<{ message: string }>(`${this.API_URL}/colores/${id}`);
   }
 
   // Temporadas
@@ -72,6 +92,10 @@ export class CatalogApiService {
 
   createSeason(data: TemporadaCreateDto): Observable<Temporada> {
     return this.http.post<Temporada>(`${this.API_URL}/temporadas/`, data);
+  }
+
+  updateSeason(id: number, data: Partial<TemporadaCreateDto>): Observable<Temporada> {
+    return this.http.put<Temporada>(`${this.API_URL}/temporadas/${id}`, data);
   }
 
   deleteSeason(id: number): Observable<{ message: string }> {
@@ -107,10 +131,22 @@ export class CatalogApiService {
     return this.http.get<Producto[]>(`${this.API_URL}/colecciones/${collectionId}/productos`);
   }
 
+  getProductCollections(productId: number): Observable<Coleccion[]> {
+    return this.http.get<Coleccion[]>(`${this.API_URL}/productos/${productId}/colecciones`);
+  }
+
+  associateProductCollection(productId: number, coleccionId: number): Observable<{ message: string }> {
+    return this.http.post<{ message: string }>(`${this.API_URL}/productos/${productId}/colecciones`, { coleccion_id: coleccionId });
+  }
+
+  removeProductCollection(productId: number, coleccionId: number): Observable<{ message: string }> {
+    return this.http.delete<{ message: string }>(`${this.API_URL}/productos/${productId}/colecciones/${coleccionId}`);
+  }
+
   // Productos
   getProducts(
     skip: number = 0, 
-    limit: number = 50, 
+    limit: number = 500, 
     categoriaId?: number, 
     estado?: string, 
     temporadaId?: number, 

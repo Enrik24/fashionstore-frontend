@@ -1,7 +1,9 @@
-import { Component, inject, signal, HostListener, ElementRef } from '@angular/core';
+import { Component, OnInit, inject, signal, HostListener, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
+import { InventoryApiService } from '../../../core/services/inventory-api.service';
+import { Inventario } from '../../../core/models/inventory.model';
 import { BreadcrumbsComponent } from '../../../shared/components/breadcrumbs/breadcrumbs.component';
 
 @Component({
@@ -78,10 +80,31 @@ import { BreadcrumbsComponent } from '../../../shared/components/breadcrumbs/bre
             }
           </a>
 
+          <a routerLink="/admin/receptions" routerLinkActive="active" class="sidebar-link" title="Recepciones por Proveedor (RF06)">
+            <i class="ri-download-cloud-2-line"></i>
+            @if (!isSidebarCollapsed()) {
+              <span>Recepciones</span>
+            }
+          </a>
+
           <a routerLink="/admin/inventory" routerLinkActive="active" class="sidebar-link" title="Gestión de Inventario (CU19)">
             <i class="ri-archive-stack-line"></i>
             @if (!isSidebarCollapsed()) {
               <span>Inventario & Stock</span>
+            }
+          </a>
+
+          <a routerLink="/admin/sales" routerLinkActive="active" class="sidebar-link" title="Ventas Realizadas (online y presenciales)">
+            <i class="ri-shopping-bag-3-line"></i>
+            @if (!isSidebarCollapsed()) {
+              <span>Ventas</span>
+            }
+          </a>
+
+          <a routerLink="/admin/reservations" routerLinkActive="active" class="sidebar-link" title="Reservas Realizadas">
+            <i class="ri-calendar-check-line"></i>
+            @if (!isSidebarCollapsed()) {
+              <span>Reservas</span>
             }
           </a>
 
@@ -96,6 +119,13 @@ import { BreadcrumbsComponent } from '../../../shared/components/breadcrumbs/bre
             <i class="ri-coupon-3-line"></i>
             @if (!isSidebarCollapsed()) {
               <span>Cupones de Descuento</span>
+            }
+          </a>
+
+          <a routerLink="/admin/promotions" routerLinkActive="active" class="sidebar-link" title="Promociones Comerciales (CU24)">
+            <i class="ri-price-tag-3-line"></i>
+            @if (!isSidebarCollapsed()) {
+              <span>Promociones</span>
             }
           </a>
 
@@ -137,6 +167,83 @@ import { BreadcrumbsComponent } from '../../../shared/components/breadcrumbs/bre
             <div class="admin-badge">
               <i class="ri-shield-check-line text-success"></i>
               <span>Sesión Administrador</span>
+            </div>
+
+            <!-- Notifications Bell Dropdown (YouTube style) -->
+            <div class="notifications-menu-wrapper" (click)="$event.stopPropagation()">
+              <button 
+                class="notification-bell-btn" 
+                (click)="toggleNotifications()"
+                [class.active]="isNotificationsOpen()"
+                title="Notificaciones de inventario"
+                aria-label="Notificaciones de bajo stock"
+              >
+                <i [class]="stockAlerts().length > 0 ? 'ri-notification-3-fill' : 'ri-notification-3-line'"></i>
+                @if (stockAlerts().length > 0) {
+                  <span class="notification-badge">{{ stockAlerts().length > 99 ? '99+' : stockAlerts().length }}</span>
+                }
+              </button>
+
+              @if (isNotificationsOpen()) {
+                <div class="notifications-dropdown-menu animate-slide-down">
+                  <div class="notifications-header">
+                    <div class="notifications-title-area">
+                      <span class="notifications-title">Notificaciones</span>
+                      @if (stockAlerts().length > 0) {
+                        <span class="notifications-count-pill">{{ stockAlerts().length }} alertas</span>
+                      }
+                    </div>
+                    <button class="btn-refresh-notifications" (click)="loadStockAlerts()" title="Actualizar alertas">
+                      <i class="ri-refresh-line" [class.spin-icon]="isLoadingAlerts()"></i>
+                    </button>
+                  </div>
+
+                  <div class="notifications-body">
+                    @if (isLoadingAlerts()) {
+                      <div class="notifications-loading">
+                        <i class="ri-loader-4-line spin-icon"></i>
+                        <span>Cargando alertas...</span>
+                      </div>
+                    } @else if (stockAlerts().length === 0) {
+                      <div class="notifications-empty">
+                        <div class="empty-icon-circle">
+                          <i class="ri-check-double-line"></i>
+                        </div>
+                        <p class="empty-title">¡Todo en orden!</p>
+                        <p class="empty-subtitle">No hay productos por debajo del stock mínimo.</p>
+                      </div>
+                    } @else {
+                      <div class="notifications-list">
+                        @for (alert of stockAlerts(); track alert.id) {
+                          <div class="notification-item">
+                            <div class="notification-item-icon">
+                              <i class="ri-alarm-warning-fill"></i>
+                            </div>
+                            <div class="notification-item-content">
+                              <div class="notification-item-title">
+                                {{ alert.variante_producto?.producto?.nombre || 'Variante #' + alert.variante_producto_id }}
+                              </div>
+                              <div class="notification-item-meta">
+                                <span class="meta-sucursal"><i class="ri-store-2-line"></i> {{ alert.sucursal?.nombre || 'Sucursal #' + alert.sucursal_id }}</span>
+                                <span class="meta-stock">Stock: <strong class="text-danger">{{ alert.cantidad }}</strong> / Mín: {{ alert.stock_minimo }}</span>
+                              </div>
+                            </div>
+                            <a routerLink="/admin/inventory" class="notification-item-action" (click)="closeNotifications()" title="Ir a inventario">
+                              <i class="ri-arrow-right-s-line"></i>
+                            </a>
+                          </div>
+                        }
+                      </div>
+                    }
+                  </div>
+
+                  <div class="notifications-footer">
+                    <a routerLink="/admin/inventory" (click)="closeNotifications()" class="view-all-link">
+                      <i class="ri-archive-stack-line"></i> Gestionar todo el inventario
+                    </a>
+                  </div>
+                </div>
+              }
             </div>
 
             <!-- Profile Dropdown in Admin Topbar -->
@@ -416,6 +523,274 @@ import { BreadcrumbsComponent } from '../../../shared/components/breadcrumbs/bre
       color: var(--primary);
     }
 
+    /* YouTube Style Notification Bell */
+    .notifications-menu-wrapper {
+      position: relative;
+    }
+
+    .notification-bell-btn {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      border: 1px solid var(--border-color);
+      background: white;
+      color: var(--primary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.25rem;
+      cursor: pointer;
+      position: relative;
+      transition: all var(--transition-fast);
+
+      &:hover, &.active {
+        background: #f8fafc;
+        border-color: var(--accent);
+        color: var(--accent);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+      }
+    }
+
+    .notification-badge {
+      position: absolute;
+      top: -2px;
+      right: -2px;
+      background: #ef4444;
+      color: white;
+      font-size: 0.65rem;
+      font-weight: 800;
+      min-width: 18px;
+      height: 18px;
+      line-height: 18px;
+      padding: 0 4px;
+      border-radius: var(--radius-full);
+      border: 2px solid white;
+      text-align: center;
+      animation: pulse-badge 2s infinite ease-in-out;
+    }
+
+    @keyframes pulse-badge {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.1); }
+    }
+
+    .notifications-dropdown-menu {
+      position: absolute;
+      top: calc(100% + 8px);
+      right: 0;
+      width: 360px;
+      max-width: 90vw;
+      background: white;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      box-shadow: 0 12px 30px -4px rgba(0, 0, 0, 0.15), 0 4px 12px -2px rgba(0, 0, 0, 0.08);
+      z-index: 1000;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .notifications-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.875rem 1.25rem;
+      border-bottom: 1px solid var(--border-color);
+      background: #fafafa;
+    }
+
+    .notifications-title-area {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .notifications-title {
+      font-weight: 800;
+      font-size: 0.95rem;
+      color: var(--primary);
+    }
+
+    .notifications-count-pill {
+      font-size: 0.7rem;
+      font-weight: 700;
+      background: rgba(239, 68, 68, 0.12);
+      color: #ef4444;
+      padding: 0.15rem 0.5rem;
+      border-radius: var(--radius-full);
+    }
+
+    .btn-refresh-notifications {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 1.1rem;
+      padding: 0.25rem;
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all var(--transition-fast);
+
+      &:hover {
+        color: var(--accent);
+        background: rgba(0, 0, 0, 0.05);
+      }
+    }
+
+    .notifications-body {
+      max-height: 340px;
+      overflow-y: auto;
+    }
+
+    .notifications-loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      padding: 2.5rem 1rem;
+      color: var(--text-muted);
+      font-size: 0.875rem;
+    }
+
+    .notifications-empty {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2.5rem 1.5rem;
+      text-align: center;
+    }
+
+    .empty-icon-circle {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: rgba(16, 185, 129, 0.1);
+      color: #10b981;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.5rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .empty-title {
+      font-weight: 700;
+      font-size: 0.9rem;
+      color: var(--primary);
+      margin-bottom: 0.25rem;
+    }
+
+    .empty-subtitle {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .notifications-list {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .notification-item {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.85rem 1.15rem;
+      border-bottom: 1px solid #f1f5f9;
+      transition: background var(--transition-fast);
+
+      &:hover {
+        background: #f8fafc;
+      }
+
+      &:last-child {
+        border-bottom: none;
+      }
+    }
+
+    .notification-item-icon {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      background: rgba(239, 68, 68, 0.1);
+      color: #ef4444;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.1rem;
+      flex-shrink: 0;
+    }
+
+    .notification-item-content {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+    }
+
+    .notification-item-title {
+      font-size: 0.8125rem;
+      font-weight: 700;
+      color: var(--primary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .notification-item-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 0.1rem;
+      font-size: 0.7rem;
+      color: var(--secondary);
+    }
+
+    .meta-sucursal {
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+      color: var(--text-muted);
+    }
+
+    .notification-item-action {
+      color: var(--text-muted);
+      font-size: 1.25rem;
+      display: flex;
+      align-items: center;
+      padding: 0.25rem;
+      border-radius: var(--radius-sm);
+      transition: all var(--transition-fast);
+
+      &:hover {
+        color: var(--accent);
+        transform: translateX(2px);
+      }
+    }
+
+    .notifications-footer {
+      padding: 0.65rem 1rem;
+      background: #fafafa;
+      border-top: 1px solid var(--border-color);
+      text-align: center;
+    }
+
+    .view-all-link {
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--accent);
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+
+      &:hover {
+        text-decoration: underline;
+      }
+    }
+
     /* User Menu Dropdown */
     .user-menu-wrapper {
       position: relative;
@@ -603,6 +978,14 @@ import { BreadcrumbsComponent } from '../../../shared/components/breadcrumbs/bre
       flex: 1;
     }
 
+    .spin-icon {
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      100% { transform: rotate(360deg); }
+    }
+
     @media (max-width: 768px) {
       .admin-sidebar {
         position: fixed;
@@ -621,12 +1004,33 @@ import { BreadcrumbsComponent } from '../../../shared/components/breadcrumbs/bre
     }
   `]
 })
-export class AdminLayoutComponent {
+export class AdminLayoutComponent implements OnInit {
   public authService = inject(AuthService);
+  private inventoryApi = inject(InventoryApiService);
   private elementRef = inject(ElementRef);
   
   public isSidebarCollapsed = signal<boolean>(false);
   public isUserMenuOpen = signal<boolean>(false);
+  public isNotificationsOpen = signal<boolean>(false);
+  public stockAlerts = signal<Inventario[]>([]);
+  public isLoadingAlerts = signal<boolean>(false);
+
+  ngOnInit(): void {
+    this.loadStockAlerts();
+  }
+
+  loadStockAlerts(): void {
+    this.isLoadingAlerts.set(true);
+    this.inventoryApi.getStockAlerts().subscribe({
+      next: (alerts) => {
+        this.stockAlerts.set(alerts || []);
+        this.isLoadingAlerts.set(false);
+      },
+      error: () => {
+        this.isLoadingAlerts.set(false);
+      }
+    });
+  }
 
   toggleSidebar(): void {
     this.isSidebarCollapsed.update(v => !v);
@@ -634,14 +1038,30 @@ export class AdminLayoutComponent {
 
   toggleUserMenu(): void {
     this.isUserMenuOpen.update(v => !v);
+    if (this.isUserMenuOpen()) {
+      this.isNotificationsOpen.set(false);
+    }
   }
 
   closeUserMenu(): void {
     this.isUserMenuOpen.set(false);
   }
 
+  toggleNotifications(): void {
+    this.isNotificationsOpen.update(v => !v);
+    if (this.isNotificationsOpen()) {
+      this.isUserMenuOpen.set(false);
+      this.loadStockAlerts();
+    }
+  }
+
+  closeNotifications(): void {
+    this.isNotificationsOpen.set(false);
+  }
+
   onLogout(): void {
     this.closeUserMenu();
+    this.closeNotifications();
     this.authService.logout();
   }
 
@@ -649,6 +1069,7 @@ export class AdminLayoutComponent {
   onDocumentClick(event: MouseEvent): void {
     if (!this.elementRef.nativeElement.contains(event.target)) {
       this.closeUserMenu();
+      this.closeNotifications();
     }
   }
 }

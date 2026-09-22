@@ -1,9 +1,11 @@
-import { Producto } from './catalog.model';
+import { Producto, GeneroProducto } from './catalog.model';
 
 export interface ProductoFilterParams {
   q?: string;
+  genero?: GeneroProducto;
   categoria_id?: number;
   temporada_id?: number;
+  coleccion_id?: number;
   precio_min?: number;
   precio_max?: number;
   talla_id?: number;

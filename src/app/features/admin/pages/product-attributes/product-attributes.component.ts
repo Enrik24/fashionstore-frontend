@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { CatalogApiService, TallaCreateDto, ColorCreateDto, TemporadaCreateDto } from '../../../../core/services/catalog-api.service';
 import { ToastService } from '../../../../core/services/toast.service';
+import { AlertService } from '../../../../core/services/alert.service';
 import { Talla, Color, Temporada, Categoria, CategoriaCreateDto, Coleccion, ColeccionCreateDto } from '../../../../core/models/catalog.model';
 
 type ActiveTab = 'tallas' | 'colores' | 'temporadas' | 'categorias' | 'colecciones';
@@ -87,9 +88,14 @@ type ActiveTab = 'tallas' | 'colores' | 'temporadas' | 'categorias' | 'coleccion
                 </div>
                 <button type="submit" class="btn btn-accent btn-add" [disabled]="tallaForm.invalid || isSaving()">
                   @if (isSaving()) { <i class="ri-loader-4-line spin"></i> }
-                  @else { <i class="ri-add-line"></i> }
-                  Agregar Talla
+                  @else { <i [class]="editingSizeId() ? 'ri-save-line' : 'ri-add-line'"></i> }
+                  {{ editingSizeId() ? 'Guardar Cambios' : 'Agregar Talla' }}
                 </button>
+                @if (editingSizeId()) {
+                  <button type="button" class="btn btn-add" (click)="cancelSizeEdit()" title="Cancelar edición">
+                    <i class="ri-close-line"></i> Cancelar
+                  </button>
+                }
               </div>
             </form>
             <div class="attr-list">
@@ -103,7 +109,15 @@ type ActiveTab = 'tallas' | 'colores' | 'temporadas' | 'categorias' | 'coleccion
                     @if (item.tipo) { <span class="attr-type">{{ item.tipo }}</span> }
                     @if (item.descripcion) { <span class="attr-desc">{{ item.descripcion }}</span> }
                   </div>
-                  <span class="attr-id">#{{ item.id }}</span>
+                  <div class="attr-actions">
+                    <span class="attr-id">#{{ item.id }}</span>
+                    <button class="btn-icon-edit" (click)="startSizeEdit(item)" title="Editar talla">
+                      <i class="ri-edit-line"></i>
+                    </button>
+                    <button class="btn-icon-danger" (click)="deleteSize(item.id)" title="Eliminar talla">
+                      <i class="ri-delete-bin-6-line"></i>
+                    </button>
+                  </div>
                 </div>
               }
               @empty {
@@ -134,9 +148,14 @@ type ActiveTab = 'tallas' | 'colores' | 'temporadas' | 'categorias' | 'coleccion
                 </div>
                 <button type="submit" class="btn btn-accent btn-add" [disabled]="colorForm.invalid || isSaving()">
                   @if (isSaving()) { <i class="ri-loader-4-line spin"></i> }
-                  @else { <i class="ri-add-line"></i> }
-                  Agregar Color
+                  @else { <i [class]="editingColorId() ? 'ri-save-line' : 'ri-add-line'"></i> }
+                  {{ editingColorId() ? 'Guardar Cambios' : 'Agregar Color' }}
                 </button>
+                @if (editingColorId()) {
+                  <button type="button" class="btn btn-add" (click)="cancelColorEdit()" title="Cancelar edición">
+                    <i class="ri-close-line"></i> Cancelar
+                  </button>
+                }
               </div>
             </form>
             <div class="attr-list">
@@ -150,7 +169,15 @@ type ActiveTab = 'tallas' | 'colores' | 'temporadas' | 'categorias' | 'coleccion
                     <span class="attr-badge color-badge">{{ item.nombre }}</span>
                     @if (item.codigo_hex) { <code class="attr-hex">{{ item.codigo_hex }}</code> }
                   </div>
-                  <span class="attr-id">#{{ item.id }}</span>
+                  <div class="attr-actions">
+                    <span class="attr-id">#{{ item.id }}</span>
+                    <button class="btn-icon-edit" (click)="startColorEdit(item)" title="Editar color">
+                      <i class="ri-edit-line"></i>
+                    </button>
+                    <button class="btn-icon-danger" (click)="deleteColor(item.id)" title="Eliminar color">
+                      <i class="ri-delete-bin-6-line"></i>
+                    </button>
+                  </div>
                 </div>
               }
               @empty {
@@ -186,9 +213,14 @@ type ActiveTab = 'tallas' | 'colores' | 'temporadas' | 'categorias' | 'coleccion
                 </div>
                 <button type="submit" class="btn btn-accent btn-add" [disabled]="seasonForm.invalid || isSaving()">
                   @if (isSaving()) { <i class="ri-loader-4-line spin"></i> }
-                  @else { <i class="ri-add-line"></i> }
-                  Agregar Temporada
+                  @else { <i [class]="editingSeasonId() ? 'ri-save-line' : 'ri-add-line'"></i> }
+                  {{ editingSeasonId() ? 'Guardar Cambios' : 'Agregar Temporada' }}
                 </button>
+                @if (editingSeasonId()) {
+                  <button type="button" class="btn btn-add" (click)="cancelSeasonEdit()" title="Cancelar edición">
+                    <i class="ri-close-line"></i> Cancelar
+                  </button>
+                }
               </div>
             </form>
             <div class="attr-list">
@@ -207,6 +239,9 @@ type ActiveTab = 'tallas' | 'colores' | 'temporadas' | 'categorias' | 'coleccion
                   </div>
                   <div class="attr-actions">
                     <span class="attr-id">#{{ item.id }}</span>
+                    <button class="btn-icon-edit" (click)="startSeasonEdit(item)" title="Editar temporada">
+                      <i class="ri-edit-line"></i>
+                    </button>
                     <button class="btn-icon-danger" (click)="deleteSeason(item.id)" title="Eliminar temporada">
                       <i class="ri-delete-bin-6-line"></i>
                     </button>
@@ -238,9 +273,14 @@ type ActiveTab = 'tallas' | 'colores' | 'temporadas' | 'categorias' | 'coleccion
                 </div>
                 <button type="submit" class="btn btn-accent btn-add" [disabled]="categoryForm.invalid || isSaving()">
                   @if (isSaving()) { <i class="ri-loader-4-line spin"></i> }
-                  @else { <i class="ri-add-line"></i> }
-                  Agregar Categoría
+                  @else { <i [class]="editingCategoryId() ? 'ri-save-line' : 'ri-add-line'"></i> }
+                  {{ editingCategoryId() ? 'Guardar Cambios' : 'Agregar Categoría' }}
                 </button>
+                @if (editingCategoryId()) {
+                  <button type="button" class="btn btn-add" (click)="cancelCategoryEdit()" title="Cancelar edición">
+                    <i class="ri-close-line"></i> Cancelar
+                  </button>
+                }
               </div>
             </form>
             <div class="attr-list">
@@ -256,6 +296,9 @@ type ActiveTab = 'tallas' | 'colores' | 'temporadas' | 'categorias' | 'coleccion
                   </div>
                   <div class="attr-actions">
                     <span class="attr-id">#{{ item.id }}</span>
+                    <button class="btn-icon-edit" (click)="startCategoryEdit(item)" title="Editar categoría">
+                      <i class="ri-edit-line"></i>
+                    </button>
                     <button class="btn-icon-danger" (click)="deleteCategory(item.id)" title="Eliminar categoría">
                       <i class="ri-delete-bin-6-line"></i>
                     </button>
@@ -296,9 +339,14 @@ type ActiveTab = 'tallas' | 'colores' | 'temporadas' | 'categorias' | 'coleccion
                 </div>
                 <button type="submit" class="btn btn-accent btn-add" [disabled]="collectionForm.invalid || isSaving()">
                   @if (isSaving()) { <i class="ri-loader-4-line spin"></i> }
-                  @else { <i class="ri-add-line"></i> }
-                  Agregar Colección
+                  @else { <i [class]="editingCollectionId() ? 'ri-save-line' : 'ri-add-line'"></i> }
+                  {{ editingCollectionId() ? 'Guardar Cambios' : 'Agregar Colección' }}
                 </button>
+                @if (editingCollectionId()) {
+                  <button type="button" class="btn btn-add" (click)="cancelCollectionEdit()" title="Cancelar edición">
+                    <i class="ri-close-line"></i> Cancelar
+                  </button>
+                }
               </div>
             </form>
             <div class="attr-list">
@@ -317,6 +365,9 @@ type ActiveTab = 'tallas' | 'colores' | 'temporadas' | 'categorias' | 'coleccion
                   </div>
                   <div class="attr-actions">
                     <span class="attr-id">#{{ item.id }}</span>
+                    <button class="btn-icon-edit" (click)="startCollectionEdit(item)" title="Editar colección">
+                      <i class="ri-edit-line"></i>
+                    </button>
                     <button class="btn-icon-danger" (click)="deleteCollection(item.id)" title="Eliminar colección">
                       <i class="ri-delete-bin-6-line"></i>
                     </button>
@@ -410,6 +461,12 @@ type ActiveTab = 'tallas' | 'colores' | 'temporadas' | 'categorias' | 'coleccion
         font-size: 0.85rem; cursor: pointer; transition: background 0.15s;
       }
       .btn-icon-danger:hover { background: rgba(239,68,68,0.2); }
+      .btn-icon-edit {
+        background: rgba(59,130,246,0.1); border: 1px solid rgba(59,130,246,0.2);
+        color: #60a5fa; border-radius: 6px; padding: 0.3rem 0.5rem;
+        font-size: 0.85rem; cursor: pointer; transition: background 0.15s;
+      }
+      .btn-icon-edit:hover { background: rgba(59,130,246,0.2); }
       .attr-loading, .attr-empty {
         text-align: center; padding: 2rem; color: var(--color-text-muted, #64748b);
         font-size: 0.9rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem;
@@ -424,6 +481,7 @@ type ActiveTab = 'tallas' | 'colores' | 'temporadas' | 'categorias' | 'coleccion
 export class ProductAttributesComponent implements OnInit {
   private catalogApi = inject(CatalogApiService);
   private toast = inject(ToastService);
+  private alertService = inject(AlertService);
   private fb = inject(FormBuilder);
 
   public activeTab = signal<ActiveTab>('tallas');
@@ -435,6 +493,13 @@ export class ProductAttributesComponent implements OnInit {
   public seasons = signal<Temporada[]>([]);
   public categories = signal<Categoria[]>([]);
   public collections = signal<Coleccion[]>([]);
+
+  // Ids en edición (null = modo crear)
+  public editingSizeId = signal<number | null>(null);
+  public editingColorId = signal<number | null>(null);
+  public editingSeasonId = signal<number | null>(null);
+  public editingCategoryId = signal<number | null>(null);
+  public editingCollectionId = signal<number | null>(null);
 
   // Tallas
   public tallaForm: FormGroup = this.fb.group({
@@ -491,6 +556,16 @@ export class ProductAttributesComponent implements OnInit {
   }
 
   // --- TALLAS ---
+  startSizeEdit(item: Talla): void {
+    this.editingSizeId.set(item.id);
+    this.tallaForm.reset({ valor: (item as any).valor || (item as any).nombre || '', tipo: (item as any).tipo || '', descripcion: (item as any).descripcion || '' });
+  }
+
+  cancelSizeEdit(): void {
+    this.editingSizeId.set(null);
+    this.tallaForm.reset({ valor: '', tipo: '', descripcion: '' });
+  }
+
   saveTalla(): void {
     if (this.tallaForm.invalid) return;
     this.isSaving.set(true);
@@ -499,22 +574,63 @@ export class ProductAttributesComponent implements OnInit {
       tipo: this.tallaForm.value.tipo || undefined,
       descripcion: this.tallaForm.value.descripcion || undefined
     };
-    this.catalogApi.createSize(dto).subscribe({
-      next: (talla) => {
+    const editId = this.editingSizeId();
+    const done = (talla: Talla, msg: string) => {
+      if (editId) {
+        this.sizes.update(list => list.map(s => s.id === editId ? talla : s));
+        this.cancelSizeEdit();
+      } else {
         this.sizes.update(list => [...list, talla]);
         this.tallaForm.reset({ valor: '', tipo: '', descripcion: '' });
-        this.toast.show('Talla "' + (talla.valor || talla.nombre) + '" creada exitosamente', 'success');
-        this.isSaving.set(false);
-      },
-      error: (err) => {
-        const msg = err.error?.detail?.[0]?.msg || err.error?.detail || 'Error al crear la talla';
-        this.toast.show(msg, 'error');
-        this.isSaving.set(false);
       }
+      this.toast.show(msg, 'success');
+      this.isSaving.set(false);
+    };
+    const fail = (err: any, fallback: string) => {
+      const msg = err.error?.detail?.[0]?.msg || err.error?.detail || fallback;
+      this.toast.show(typeof msg === 'string' ? msg : fallback, 'error');
+      this.isSaving.set(false);
+    };
+    if (editId) {
+      this.catalogApi.updateSize(editId, dto).subscribe({
+        next: (talla) => done(talla, 'Talla actualizada exitosamente'),
+        error: (err) => fail(err, 'Error al actualizar la talla')
+      });
+    } else {
+      this.catalogApi.createSize(dto).subscribe({
+        next: (talla) => done(talla, 'Talla "' + (talla.valor || (talla as any).nombre) + '" creada exitosamente'),
+        error: (err) => fail(err, 'Error al crear la talla')
+      });
+    }
+  }
+
+  async deleteSize(id: number): Promise<void> {
+    const confirmed = await this.alertService.deleteConfirm(
+      '¿Eliminar talla?',
+      'Las variantes que la usen quedarán como "Sin talla".'
+    );
+    if (!confirmed) return;
+    this.catalogApi.deleteSize(id).subscribe({
+      next: () => {
+        this.sizes.update(list => list.filter(s => s.id !== id));
+        if (this.editingSizeId() === id) this.cancelSizeEdit();
+        this.toast.show('Talla eliminada', 'success');
+      },
+      error: (err) => this.toast.show(err.error?.detail || 'Error al eliminar la talla', 'error')
     });
   }
 
   // --- COLORES ---
+  startColorEdit(item: Color): void {
+    this.editingColorId.set(item.id);
+    this.colorForm.reset({ nombre: item.nombre || '', codigo_hex: item.codigo_hex || '#111827' });
+  }
+
+  cancelColorEdit(): void {
+    this.editingColorId.set(null);
+    this.colorForm.reset({ nombre: '', codigo_hex: '#111827' });
+  }
+
   saveColor(): void {
     if (this.colorForm.invalid) return;
     this.isSaving.set(true);
@@ -522,22 +638,69 @@ export class ProductAttributesComponent implements OnInit {
       nombre: this.colorForm.value.nombre,
       codigo_hex: this.colorForm.value.codigo_hex || undefined
     };
-    this.catalogApi.createColor(dto).subscribe({
-      next: (color) => {
-        this.colors.update(list => [...list, color]);
-        this.colorForm.reset({ nombre: '', codigo_hex: '#111827' });
-        this.toast.show('Color "' + color.nombre + '" creado exitosamente', 'success');
-        this.isSaving.set(false);
+    const editId = this.editingColorId();
+    const fail = (err: any, fallback: string) => {
+      const msg = err.error?.detail?.[0]?.msg || err.error?.detail || fallback;
+      this.toast.show(typeof msg === 'string' ? msg : fallback, 'error');
+      this.isSaving.set(false);
+    };
+    if (editId) {
+      this.catalogApi.updateColor(editId, dto).subscribe({
+        next: (color) => {
+          this.colors.update(list => list.map(c => c.id === editId ? color : c));
+          this.cancelColorEdit();
+          this.toast.show('Color actualizado exitosamente', 'success');
+          this.isSaving.set(false);
+        },
+        error: (err) => fail(err, 'Error al actualizar el color')
+      });
+    } else {
+      this.catalogApi.createColor(dto).subscribe({
+        next: (color) => {
+          this.colors.update(list => [...list, color]);
+          this.colorForm.reset({ nombre: '', codigo_hex: '#111827' });
+          this.toast.show('Color "' + color.nombre + '" creado exitosamente', 'success');
+          this.isSaving.set(false);
+        },
+        error: (err) => fail(err, 'Error al crear el color')
+      });
+    }
+  }
+
+  async deleteColor(id: number): Promise<void> {
+    const confirmed = await this.alertService.deleteConfirm(
+      '¿Eliminar color?',
+      'Solo se puede eliminar si ninguna variante lo usa.'
+    );
+    if (!confirmed) return;
+    this.catalogApi.deleteColor(id).subscribe({
+      next: () => {
+        this.colors.update(list => list.filter(c => c.id !== id));
+        if (this.editingColorId() === id) this.cancelColorEdit();
+        this.toast.show('Color eliminado', 'success');
       },
-      error: (err) => {
-        const msg = err.error?.detail?.[0]?.msg || err.error?.detail || 'Error al crear el color';
-        this.toast.show(msg, 'error');
-        this.isSaving.set(false);
-      }
+      error: (err) => this.toast.show(err.error?.detail || 'Error al eliminar el color', 'error')
     });
   }
 
   // --- TEMPORADAS ---
+  startSeasonEdit(item: Temporada): void {
+    this.editingSeasonId.set(item.id);
+    this.seasonForm.reset({
+      nombre: item.nombre || '',
+      fecha_inicio: (item.fecha_inicio || '').substring(0, 10),
+      fecha_fin: (item.fecha_fin || '').substring(0, 10),
+      descripcion: item.descripcion || ''
+    });
+  }
+
+  cancelSeasonEdit(): void {
+    this.editingSeasonId.set(null);
+    const today = new Date().toISOString().substring(0, 10);
+    const nextQuarter = new Date(new Date().setMonth(new Date().getMonth() + 3)).toISOString().substring(0, 10);
+    this.seasonForm.reset({ nombre: '', fecha_inicio: today, fecha_fin: nextQuarter, descripcion: '' });
+  }
+
   saveSeason(): void {
     if (this.seasonForm.invalid) return;
     this.isSaving.set(true);
@@ -547,25 +710,41 @@ export class ProductAttributesComponent implements OnInit {
       fecha_fin: this.seasonForm.value.fecha_fin,
       descripcion: this.seasonForm.value.descripcion || undefined
     };
-    this.catalogApi.createSeason(dto).subscribe({
-      next: (season) => {
-        this.seasons.update(list => [...list, season]);
-        const today = new Date().toISOString().substring(0, 10);
-        const nextQuarter = new Date(new Date().setMonth(new Date().getMonth() + 3)).toISOString().substring(0, 10);
-        this.seasonForm.reset({ nombre: '', fecha_inicio: today, fecha_fin: nextQuarter, descripcion: '' });
-        this.toast.show('Temporada "' + season.nombre + '" creada exitosamente', 'success');
-        this.isSaving.set(false);
-      },
-      error: (err) => {
-        const msg = err.error?.detail?.[0]?.msg || err.error?.detail || 'Error al crear la temporada';
-        this.toast.show(msg, 'error');
-        this.isSaving.set(false);
-      }
-    });
+    const editId = this.editingSeasonId();
+    const fail = (err: any, fallback: string) => {
+      const msg = err.error?.detail?.[0]?.msg || err.error?.detail || fallback;
+      this.toast.show(typeof msg === 'string' ? msg : fallback, 'error');
+      this.isSaving.set(false);
+    };
+    if (editId) {
+      this.catalogApi.updateSeason(editId, dto).subscribe({
+        next: (season) => {
+          this.seasons.update(list => list.map(s => s.id === editId ? season : s));
+          this.cancelSeasonEdit();
+          this.toast.show('Temporada actualizada exitosamente', 'success');
+          this.isSaving.set(false);
+        },
+        error: (err) => fail(err, 'Error al actualizar la temporada')
+      });
+    } else {
+      this.catalogApi.createSeason(dto).subscribe({
+        next: (season) => {
+          this.seasons.update(list => [...list, season]);
+          this.cancelSeasonEdit();
+          this.toast.show('Temporada "' + season.nombre + '" creada exitosamente', 'success');
+          this.isSaving.set(false);
+        },
+        error: (err) => fail(err, 'Error al crear la temporada')
+      });
+    }
   }
 
-  deleteSeason(id: number): void {
-    if (!confirm('¿Eliminar esta temporada? Los productos asociados perderán su referencia.')) return;
+  async deleteSeason(id: number): Promise<void> {
+    const confirmed = await this.alertService.deleteConfirm(
+      '¿Eliminar temporada?',
+      'Los productos asociados perderán su referencia.'
+    );
+    if (!confirmed) return;
     this.catalogApi.deleteSeason(id).subscribe({
       next: () => {
         this.seasons.update(list => list.filter(s => s.id !== id));
@@ -576,6 +755,16 @@ export class ProductAttributesComponent implements OnInit {
   }
 
   // --- CATEGORÍAS ---
+  startCategoryEdit(item: Categoria): void {
+    this.editingCategoryId.set(item.id);
+    this.categoryForm.reset({ nombre: item.nombre || '', descripcion: item.descripcion || '' });
+  }
+
+  cancelCategoryEdit(): void {
+    this.editingCategoryId.set(null);
+    this.categoryForm.reset({ nombre: '', descripcion: '' });
+  }
+
   saveCategory(): void {
     if (this.categoryForm.invalid) return;
     this.isSaving.set(true);
@@ -583,23 +772,41 @@ export class ProductAttributesComponent implements OnInit {
       nombre: this.categoryForm.value.nombre,
       descripcion: this.categoryForm.value.descripcion || undefined
     };
-    this.catalogApi.createCategory(dto).subscribe({
-      next: (cat) => {
-        this.categories.update(list => [...list, cat]);
-        this.categoryForm.reset({ nombre: '', descripcion: '' });
-        this.toast.show('Categoría "' + cat.nombre + '" creada exitosamente', 'success');
-        this.isSaving.set(false);
-      },
-      error: (err) => {
-        const msg = err.error?.detail?.[0]?.msg || err.error?.detail || 'Error al crear la categoría';
-        this.toast.show(msg, 'error');
-        this.isSaving.set(false);
-      }
-    });
+    const editId = this.editingCategoryId();
+    const fail = (err: any, fallback: string) => {
+      const msg = err.error?.detail?.[0]?.msg || err.error?.detail || fallback;
+      this.toast.show(typeof msg === 'string' ? msg : fallback, 'error');
+      this.isSaving.set(false);
+    };
+    if (editId) {
+      this.catalogApi.updateCategory(editId, dto).subscribe({
+        next: (cat) => {
+          this.categories.update(list => list.map(c => c.id === editId ? cat : c));
+          this.cancelCategoryEdit();
+          this.toast.show('Categoría actualizada exitosamente', 'success');
+          this.isSaving.set(false);
+        },
+        error: (err) => fail(err, 'Error al actualizar la categoría')
+      });
+    } else {
+      this.catalogApi.createCategory(dto).subscribe({
+        next: (cat) => {
+          this.categories.update(list => [...list, cat]);
+          this.categoryForm.reset({ nombre: '', descripcion: '' });
+          this.toast.show('Categoría "' + cat.nombre + '" creada exitosamente', 'success');
+          this.isSaving.set(false);
+        },
+        error: (err) => fail(err, 'Error al crear la categoría')
+      });
+    }
   }
 
-  deleteCategory(id: number): void {
-    if (!confirm('¿Eliminar esta categoría?')) return;
+  async deleteCategory(id: number): Promise<void> {
+    const confirmed = await this.alertService.deleteConfirm(
+      '¿Eliminar categoría?',
+      '¿Estás seguro de que deseas eliminar esta categoría?'
+    );
+    if (!confirmed) return;
     this.catalogApi.deleteCategory(id).subscribe({
       next: () => {
         this.categories.update(list => list.filter(c => c.id !== id));
@@ -610,6 +817,20 @@ export class ProductAttributesComponent implements OnInit {
   }
 
   // --- COLECCIONES ---
+  startCollectionEdit(item: Coleccion): void {
+    this.editingCollectionId.set(item.id);
+    this.collectionForm.reset({
+      nombre: item.nombre || '',
+      temporada_id: (item as any).temporada_id ?? (item.temporada as any)?.id ?? null,
+      descripcion: item.descripcion || ''
+    });
+  }
+
+  cancelCollectionEdit(): void {
+    this.editingCollectionId.set(null);
+    this.collectionForm.reset({ nombre: '', temporada_id: null, descripcion: '' });
+  }
+
   saveCollection(): void {
     if (this.collectionForm.invalid) return;
     this.isSaving.set(true);
@@ -618,23 +839,41 @@ export class ProductAttributesComponent implements OnInit {
       temporada_id: this.collectionForm.value.temporada_id ? Number(this.collectionForm.value.temporada_id) : undefined,
       descripcion: this.collectionForm.value.descripcion || undefined
     };
-    this.catalogApi.createCollection(dto).subscribe({
-      next: (col) => {
-        this.collections.update(list => [...list, col]);
-        this.collectionForm.reset({ nombre: '', temporada_id: null, descripcion: '' });
-        this.toast.show('Colección "' + col.nombre + '" creada exitosamente', 'success');
-        this.isSaving.set(false);
-      },
-      error: (err) => {
-        const msg = err.error?.detail?.[0]?.msg || err.error?.detail || 'Error al crear la colección';
-        this.toast.show(msg, 'error');
-        this.isSaving.set(false);
-      }
-    });
+    const editId = this.editingCollectionId();
+    const fail = (err: any, fallback: string) => {
+      const msg = err.error?.detail?.[0]?.msg || err.error?.detail || fallback;
+      this.toast.show(typeof msg === 'string' ? msg : fallback, 'error');
+      this.isSaving.set(false);
+    };
+    if (editId) {
+      this.catalogApi.updateCollection(editId, dto).subscribe({
+        next: (col) => {
+          this.collections.update(list => list.map(c => c.id === editId ? col : c));
+          this.cancelCollectionEdit();
+          this.toast.show('Colección actualizada exitosamente', 'success');
+          this.isSaving.set(false);
+        },
+        error: (err) => fail(err, 'Error al actualizar la colección')
+      });
+    } else {
+      this.catalogApi.createCollection(dto).subscribe({
+        next: (col) => {
+          this.collections.update(list => [...list, col]);
+          this.collectionForm.reset({ nombre: '', temporada_id: null, descripcion: '' });
+          this.toast.show('Colección "' + col.nombre + '" creada exitosamente', 'success');
+          this.isSaving.set(false);
+        },
+        error: (err) => fail(err, 'Error al crear la colección')
+      });
+    }
   }
 
-  deleteCollection(id: number): void {
-    if (!confirm('¿Eliminar esta colección?')) return;
+  async deleteCollection(id: number): Promise<void> {
+    const confirmed = await this.alertService.deleteConfirm(
+      '¿Eliminar colección?',
+      '¿Estás seguro de que deseas eliminar esta colección?'
+    );
+    if (!confirmed) return;
     this.catalogApi.deleteCollection(id).subscribe({
       next: () => {
         this.collections.update(list => list.filter(c => c.id !== id));

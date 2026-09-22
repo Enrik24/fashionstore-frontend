@@ -42,8 +42,9 @@ describe('CartService (Iteración 2 - CU11)', () => {
 
   beforeEach(() => {
     mockToast = jasmine.createSpyObj('ToastService', ['success', 'error', 'info', 'warning']);
-    mockAuth = jasmine.createSpyObj('AuthService', ['isAuthenticated', 'getUserFullName']);
+    mockAuth = jasmine.createSpyObj('AuthService', ['isAuthenticated', 'isClient', 'getUserFullName']);
     mockAuth.isAuthenticated.and.returnValue(false);
+    mockAuth.isClient.and.returnValue(true);
 
     TestBed.configureTestingModule({
       imports: [HttpClientTestingModule],
@@ -102,26 +103,47 @@ describe('CartService (Iteración 2 - CU11)', () => {
     expect(mockToast.success).toHaveBeenCalledWith('Producto añadido al carrito');
   });
 
-  it('debe aplicar un cupón válido y actualizar el carrito', () => {
-    const couponResponse: CuponValidacionResponse = {
-      valido: true,
-      mensaje: 'Cupón de 10% aplicado',
-      descuento_calculado: 30
+  it('debe aplicar un cupón válido y actualizar el carrito (CU27)', () => {
+    const updatedCart: Carrito = {
+      ...mockCart,
+      descuento_aplicado: 30,
+      total: 270,
+      cupon: {
+        id: 1,
+        codigo: 'DESCUENTO10',
+        tipo: 'PORCENTAJE',
+        valor: 10,
+        fecha_inicio: '2026-01-01T00:00:00Z',
+        fecha_fin: '2026-12-31T00:00:00Z',
+        estado: 'ACTIVO',
+        usos_actuales: 1
+      }
     };
 
     service.applyCoupon('DESCUENTO10').subscribe(res => {
-      expect(res.valido).toBeTrue();
-      expect(res.descuento_calculado).toBe(30);
+      expect(res.descuento_aplicado).toBe(30);
+      expect(res.total).toBe(270);
     });
 
     const req = httpMock.expectOne(`${API_URL}/aplicar-cupon`);
     expect(req.request.method).toBe('POST');
     expect(req.request.body).toEqual({ codigo: 'DESCUENTO10' });
-    req.flush(couponResponse);
+    req.flush(updatedCart);
 
-    const loadReq = httpMock.expectOne(`${API_URL}/`);
-    loadReq.flush({ ...mockCart, descuento_aplicado: 30, total: 270 });
+    expect(mockToast.success).toHaveBeenCalledWith('Cupón aplicado exitosamente');
+    expect(service.cartSignal()?.descuento_aplicado).toBe(30);
+  });
 
-    expect(mockToast.success).toHaveBeenCalledWith('Cupón de 10% aplicado');
+  it('debe remover el cupón aplicado (CU27)', () => {
+    service.removeCoupon().subscribe(res => {
+      expect(res.descuento_aplicado).toBe(0);
+      expect(res.total).toBe(300);
+    });
+
+    const req = httpMock.expectOne(`${API_URL}/remover-cupon`);
+    expect(req.request.method).toBe('DELETE');
+    req.flush(mockCart);
+
+    expect(mockToast.info).toHaveBeenCalledWith('Cupón removido del carrito');
   });
 });

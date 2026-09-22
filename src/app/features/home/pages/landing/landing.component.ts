@@ -3,11 +3,14 @@ import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { AuthService } from '../../../../core/services/auth.service';
 import { AiService } from '../../../../core/services/ai.service';
+import { PublicCatalogService } from '../../../../core/services/public-catalog.service';
+import { Producto } from '../../../../core/models/catalog.model';
+import { ProductCardComponent } from '../../../catalog/components/product-card/product-card.component';
 
 @Component({
   selector: 'app-landing',
   standalone: true,
-  imports: [CommonModule, RouterLink],
+  imports: [CommonModule, RouterLink, ProductCardComponent],
   template: `
     <div class="landing-page">
       <!-- Hero Section -->
@@ -24,7 +27,7 @@ import { AiService } from '../../../../core/services/ai.service';
               <span class="gradient-text font-serif">Experimenta con IA</span>
             </h1>
             <p class="hero-description">
-              Descubre las últimas tendencias en moda para hombre y mujer. Reserva tus prendas favoritas para probártelas en tu sucursal más cercana o visualízalas en tiempo real con nuestro vestidor virtual en realidad aumentada.
+              Descubre las últimas tendencias en moda para hombre y mujer en nuestro catálogo interactivo. Reserva tus prendas favoritas para probártelas en tu sucursal más cercana, visualízalas en tiempo real con nuestro vestidor virtual en realidad aumentada o consulta al <strong>asistente virtual con IA</strong> para encontrar tu estilo ideal.
             </p>
             <div class="hero-actions">
               <a routerLink="/home/mujer" class="btn btn-accent btn-lg">
@@ -63,9 +66,15 @@ import { AiService } from '../../../../core/services/ai.service';
             <div class="visual-card visual-card-1 glass animate-slide-down">
               <div class="visual-badge"><i class="ri-t-shirt-air-line"></i> Nueva Temporada</div>
               <div class="visual-image-placeholder">
-                <div class="category-icon-large"><i class="ri-sparkling-2-line"></i></div>
-                <div class="visual-card-title">Colección Primavera - Verano</div>
-                <div class="visual-card-price">Desde Bs. 149.00</div>
+                <img
+                  src="assets/images/hero-temporada.jpg"
+                  alt="Look urbano de la Colección Primavera - Verano 2026"
+                  class="visual-photo"
+                />
+                <div class="visual-photo-caption">
+                  <div class="visual-card-title">Colección Primavera - Verano</div>
+                  <div class="visual-card-price">Desde Bs. 149.00</div>
+                </div>
               </div>
             </div>
             <div class="floating-badge badge-top-right glass">
@@ -91,12 +100,21 @@ import { AiService } from '../../../../core/services/ai.service';
         <div class="section-header text-center">
           <span class="section-subtitle">EXPLORA NUESTRO CATÁLOGO</span>
           <h2 class="section-title">Elige tu Estilo</h2>
-          <p class="section-desc">Diseños vanguardistas confeccionados con los más altos estándares de calidad textil.</p>
+          <p class="section-desc">
+            Diseños vanguardistas confeccionados con los más altos estándares de calidad textil.
+            Recorre el catálogo completo y filtra por talla, color o temporada.
+          </p>
         </div>
 
         <div class="grid grid-cols-2 categories-grid">
           <!-- Card Mujer -->
           <div class="category-card category-women card-hover">
+            <img
+              src="assets/images/coleccion-mujer.jpg"
+              alt="Modelo con look de la Colección Mujer 2026"
+              class="category-bg"
+              loading="lazy"
+            />
             <div class="category-overlay"></div>
             <div class="category-content">
               <span class="category-tag">TENDENCIAS 2026</span>
@@ -110,6 +128,12 @@ import { AiService } from '../../../../core/services/ai.service';
 
           <!-- Card Hombre -->
           <div class="category-card category-men card-hover">
+            <img
+              src="assets/images/coleccion-hombre.jpg"
+              alt="Modelo con look de la Colección Hombre 2026"
+              class="category-bg"
+              loading="lazy"
+            />
             <div class="category-overlay"></div>
             <div class="category-content">
               <span class="category-tag">ESTILO URBANO & FORMAL</span>
@@ -121,6 +145,54 @@ import { AiService } from '../../../../core/services/ai.service';
             </div>
           </div>
         </div>
+
+        <div class="assistant-hint glass">
+          <i class="ri-sparkling-fill"></i>
+          <p>
+            <strong>¿No sabes por dónde empezar?</strong> Abre el chat <strong>Fashion IA</strong> en la
+            esquina inferior derecha: nuestro asistente virtual con IA analiza el catálogo interactivo y te
+            arma un outfit completo según la ocasión, tu talla y tu estilo. Inicia sesión para conversar con él
+            y reservar las prendas que más te gusten en tu sucursal más cercana.
+          </p>
+        </div>
+      </section>
+
+      <!-- Sección Recomendaciones -->
+      <section class="container recommendations-section">
+        <div class="section-header-flex">
+          <div>
+            <div class="section-badge-inline">
+              <i class="ri-sparkling-fill text-accent"></i>
+              <span>{{ recommendationBadge() }}</span>
+            </div>
+            <h2 class="section-title">
+              @if (isPersonalized()) {
+                Recomendaciones Para Ti
+              } @else {
+                Recomendaciones
+              }
+            </h2>
+            <p class="section-desc">
+              {{ recommendationMessage() }}
+            </p>
+          </div>
+          <a routerLink="/catalog" class="btn btn-outline-accent btn-sm view-all-btn">
+            Explorar Catálogo Completo <i class="ri-arrow-right-line"></i>
+          </a>
+        </div>
+
+        @if (isLoadingRecommendations()) {
+          <div class="recommendations-loading py-12 text-center">
+            <i class="ri-loader-4-line spin-icon text-3xl text-accent"></i>
+            <p class="text-muted mt-3">Cargando recomendaciones destacadas...</p>
+          </div>
+        } @else if (recommendedProducts().length > 0) {
+          <div class="recommendations-grid">
+            @for (product of recommendedProducts(); track product.id) {
+              <app-product-card [product]="product" class="animate-fade-in"></app-product-card>
+            }
+          </div>
+        }
       </section>
 
       <!-- Smart Features Section -->
@@ -237,7 +309,7 @@ import { AiService } from '../../../../core/services/ai.service';
           <div class="cta-content">
             <span class="cta-badge">EXPERIENCIA EXCLUSIVA</span>
             <h2 class="cta-title">Únete a FashionStore hoy mismo</h2>
-            <p class="cta-text">Regístrate para disfrutar de reservas express, catálogo interactivo y notificaciones de nuevos ingresos.</p>
+            <p class="cta-text">Regístrate para disfrutar de reservas express, catálogo interactivo, recomendaciones de nuestro asistente virtual con IA y notificaciones de nuevos ingresos.</p>
             <div class="cta-buttons">
               @if (!authService.isAuthenticated()) {
                 <a routerLink="/auth/register" class="btn btn-accent btn-lg">
@@ -416,11 +488,28 @@ import { AiService } from '../../../../core/services/ai.service';
     }
 
     .visual-image-placeholder {
+      position: relative;
+      overflow: hidden;
       background: linear-gradient(135deg, rgba(225, 29, 72, 0.2) 0%, rgba(15, 23, 42, 0.6) 100%);
       border-radius: var(--radius-lg);
-      padding: 3rem 1.5rem;
-      text-align: center;
-      border: 1px dashed rgba(255, 255, 255, 0.2);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .visual-photo {
+      display: block;
+      width: 100%;
+      height: 280px;
+      object-fit: cover;
+      object-position: center 18%;
+    }
+
+    .visual-photo-caption {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      padding: 1.25rem 1.5rem;
+      background: linear-gradient(180deg, rgba(15, 23, 42, 0) 0%, rgba(15, 23, 42, 0.85) 60%, rgba(15, 23, 42, 0.96) 100%);
     }
 
     .category-icon-large {
@@ -530,10 +619,34 @@ import { AiService } from '../../../../core/services/ai.service';
       color: white;
     }
 
+    .category-bg {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center 25%;
+      z-index: 0;
+      transition: transform var(--transition-slow);
+    }
+
+    .category-card:hover .category-bg {
+      transform: scale(1.06);
+    }
+
     .category-overlay {
       position: absolute;
       inset: 0;
-      background: radial-gradient(circle at top right, rgba(255, 255, 255, 0.1), transparent 70%);
+      z-index: 1;
+      background: linear-gradient(180deg, rgba(15, 23, 42, 0.15) 0%, rgba(15, 23, 42, 0.55) 55%, rgba(15, 23, 42, 0.9) 100%);
+    }
+
+    .category-women .category-overlay {
+      background: linear-gradient(180deg, rgba(131, 24, 67, 0.25) 0%, rgba(76, 5, 25, 0.68) 55%, rgba(30, 2, 11, 0.94) 100%);
+    }
+
+    .category-men .category-overlay {
+      background: linear-gradient(180deg, rgba(15, 23, 42, 0.2) 0%, rgba(15, 23, 42, 0.7) 55%, rgba(2, 6, 23, 0.94) 100%);
     }
 
     .category-content {
@@ -562,6 +675,34 @@ import { AiService } from '../../../../core/services/ai.service';
       opacity: 0.9;
       line-height: 1.5;
       margin-bottom: 0.5rem;
+    }
+
+    .assistant-hint {
+      margin-top: 2rem;
+      padding: 1.25rem 1.5rem;
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border-color);
+      background: var(--bg-card);
+      display: flex;
+      align-items: flex-start;
+      gap: 1rem;
+
+      i {
+        font-size: 1.5rem;
+        color: var(--accent);
+        line-height: 1.4;
+      }
+
+      p {
+        margin: 0;
+        font-size: 0.9375rem;
+        line-height: 1.6;
+        color: var(--text-muted);
+      }
+
+      strong {
+        color: var(--primary);
+      }
     }
 
     /* Features */
@@ -742,6 +883,61 @@ import { AiService } from '../../../../core/services/ai.service';
       margin-top: 1rem;
     }
 
+    /* Recommendations Section */
+    .recommendations-section {
+      display: flex;
+      flex-direction: column;
+      gap: 2rem;
+    }
+
+    .section-header-flex {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      flex-wrap: wrap;
+      gap: 1.25rem;
+    }
+
+    .section-badge-inline {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.8125rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 0.5rem;
+    }
+
+    .view-all-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .recommendations-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1.5rem;
+    }
+
+    .recommendations-loading {
+      background: rgba(248, 250, 252, 0.6);
+      border: 1px dashed var(--border-color);
+      border-radius: var(--radius-lg);
+    }
+
+    .spin-icon {
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      100% { transform: rotate(360deg); }
+    }
+
     @media (max-width: 992px) {
       .hero-container {
         grid-template-columns: 1fr;
@@ -751,6 +947,9 @@ import { AiService } from '../../../../core/services/ai.service';
       }
       .badge-top-right, .badge-bottom-left {
         display: none;
+      }
+      .recommendations-grid {
+        grid-template-columns: repeat(2, 1fr);
       }
       .features-grid {
         grid-template-columns: repeat(2, 1fr);
@@ -764,6 +963,13 @@ import { AiService } from '../../../../core/services/ai.service';
       .categories-grid {
         grid-template-columns: 1fr;
       }
+      .recommendations-grid {
+        grid-template-columns: 1fr;
+      }
+      .section-header-flex {
+        flex-direction: column;
+        align-items: flex-start;
+      }
       .features-grid {
         grid-template-columns: 1fr;
       }
@@ -774,16 +980,33 @@ import { AiService } from '../../../../core/services/ai.service';
         flex-direction: column;
         width: 100%;
       }
+      .visual-photo {
+        height: 220px;
+      }
+      .assistant-hint {
+        flex-direction: column;
+        gap: 0.5rem;
+      }
     }
   `]
 })
 export class LandingComponent implements OnInit {
   public authService = inject(AuthService);
   private aiService = inject(AiService);
+  private publicCatalogService = inject(PublicCatalogService);
 
   public trends = signal<any[]>([]);
+  public recommendedProducts = signal<Producto[]>([]);
+  public isLoadingRecommendations = signal<boolean>(true);
+  public isPersonalized = signal<boolean>(false);
+  public recommendationBadge = signal<string>('SELECCIÓN ESPECIAL • NOVEDADES');
+  public recommendationMessage = signal<string>(
+    'Descubre las prendas más recientes añadidas a nuestra tienda, seleccionadas cuidadosamente para hombre, mujer y estilos unisex.'
+  );
 
   ngOnInit(): void {
+    this.loadRecommendations();
+
     this.aiService.getTrends().subscribe({
       next: (res) => {
         if (res && res.tendencias_destacadas) {
@@ -793,4 +1016,111 @@ export class LandingComponent implements OnInit {
       error: () => {}
     });
   }
+
+  loadRecommendations(): void {
+    this.isLoadingRecommendations.set(true);
+
+    if (this.authService.isAuthenticated()) {
+      this.aiService.getRecommendations({ limite: 4 }).subscribe({
+        next: (res) => {
+          if (res && res.recomendaciones && res.recomendaciones.length > 0) {
+            const mapped: Producto[] = res.recomendaciones.map((rec: any) => ({
+              id: rec.producto_id || rec.id,
+              sku: rec.sku || `REC-${rec.producto_id || rec.id}`,
+              nombre: rec.nombre,
+              descripcion: rec.razon || 'Recomendación personalizada de moda',
+              precio: Number(rec.precio || 0),
+              imagenes: this.normalizarImagenes(rec.imagenes, rec.imagen_url),
+              estado: 'ACTIVO' as any,
+              genero: rec.genero,
+              categoria_id: rec.categoria_id ?? 0,
+              categoria: rec.categoria ? { id: 0, nombre: rec.categoria, descripcion: '' } : undefined
+            }));
+
+            this.recommendedProducts.set(mapped.slice(0, 4));
+            this.isPersonalized.set(true);
+            this.recommendationBadge.set(
+              res.estilo_detectado
+                ? `PERSONALIZADO CON IA • ${res.estilo_detectado.toUpperCase()}`
+                : 'PERSONALIZADO CON IA'
+            );
+            if (res.mensaje_personalizado) {
+              this.recommendationMessage.set(res.mensaje_personalizado);
+            }
+            this.isLoadingRecommendations.set(false);
+            return;
+          }
+          this.loadDefaultRecommendations();
+        },
+        error: (err) => {
+          console.warn('No se pudieron obtener recomendaciones personalizadas de IA, usando catálogo:', err);
+          this.loadDefaultRecommendations();
+        }
+      });
+    } else {
+      this.loadDefaultRecommendations();
+    }
+  }
+
+  private normalizarImagenes(imagenes: any, imagenUrl?: any): string[] {
+    if (Array.isArray(imagenes) && imagenes.length > 0) return imagenes;
+    if (typeof imagenes === 'string' && imagenes.trim().length > 0) {
+      try {
+        const parsed = JSON.parse(imagenes);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch {
+        return [imagenes];
+      }
+    }
+    if (imagenUrl) return [imagenUrl];
+    return [];
+  }
+
+  loadDefaultRecommendations(): void {
+    this.isPersonalized.set(false);
+    this.recommendationBadge.set('SELECCIÓN ESPECIAL • NOVEDADES');
+    this.recommendationMessage.set(
+      'Descubre las prendas más recientes añadidas a nuestra tienda, seleccionadas cuidadosamente para hombre, mujer y estilos unisex.'
+    );
+
+    this.publicCatalogService.getCatalog({ limite: 30 }).subscribe({
+      next: (res) => {
+        if (res && res.items && res.items.length > 0) {
+          const items = res.items;
+
+          // Separar los productos más recientes por género
+          const menItems = items.filter(p => p.genero === 'HOMBRE');
+          const womenOrUnisexItems = items.filter(p => p.genero === 'MUJER' || p.genero === 'UNISEX');
+
+          const selected: Producto[] = [];
+
+          // Tomar los 2 más recientes de Hombre y los 2 más recientes de Mujer / Unisex
+          const takeMen = menItems.slice(0, 2);
+          const takeWomen = womenOrUnisexItems.slice(0, 2);
+
+          selected.push(...takeMen, ...takeWomen);
+
+          // Si falta alguno para completar 4, rellenar con los productos más recientes restantes
+          if (selected.length < 4) {
+            const selectedIds = new Set(selected.map(s => s.id));
+            for (const item of items) {
+              if (!selectedIds.has(item.id)) {
+                selected.push(item);
+                selectedIds.add(item.id);
+                if (selected.length === 4) break;
+              }
+            }
+          }
+
+          this.recommendedProducts.set(selected.slice(0, 4));
+        }
+        this.isLoadingRecommendations.set(false);
+      },
+      error: (err) => {
+        console.error('Error cargando recomendaciones por defecto:', err);
+        this.isLoadingRecommendations.set(false);
+      }
+    });
+  }
 }
+

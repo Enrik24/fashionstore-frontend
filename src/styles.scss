@@ -276,6 +276,14 @@ button, input, select, textarea {
     color: var(--accent);
     margin-left: 2px;
   }
+
+  .optional-hint {
+    color: var(--text-muted, #94a3b8);
+    font-size: 0.78rem;
+    font-weight: 400;
+    margin-left: 4px;
+    font-style: italic;
+  }
 }
 
 .form-control {
@@ -510,3 +518,45 @@ button, input, select, textarea {
   .md\:grid-cols-2, .lg\:grid-cols-3, .lg\:grid-cols-4 { grid-template-columns: 1fr; }
   .container { padding-left: 1rem; padding-right: 1rem; }
 }
+
+/* SweetAlert2 FashionStore Styling */
+.fs-swal-popup {
+  border-radius: var(--radius-lg) !important;
+  font-family: inherit !important;
+  box-shadow: var(--shadow-xl) !important;
+  padding: 1.75rem !important;
+
+  .swal2-title {
+    font-family: 'Outfit', sans-serif !important;
+    font-size: 1.4rem !important;
+    font-weight: 700 !important;
+    color: var(--primary) !important;
+  }
+
+  .swal2-html-container {
+    color: var(--secondary) !important;
+    font-size: 0.95rem !important;
+    line-height: 1.5 !important;
+  }
+}
+
+.fs-swal-confirm-btn, .fs-swal-cancel-btn {
+  font-family: inherit !important;
+  font-weight: 600 !important;
+  font-size: 0.875rem !important;
+  border-radius: var(--radius-md) !important;
+  padding: 0.6rem 1.25rem !important;
+  transition: all var(--transition-fast) !important;
+}
+
+.fs-swal-cancel-btn {
+  background-color: #f1f5f9 !important;
+  color: var(--secondary) !important;
+  border: 1px solid var(--border-color) !important;
+
+  &:hover {
+    background-color: #e2e8f0 !important;
+    color: var(--primary) !important;
+  }
+}
+

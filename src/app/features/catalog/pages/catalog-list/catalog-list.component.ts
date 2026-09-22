@@ -3,7 +3,8 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { PublicCatalogService } from '../../../../core/services/public-catalog.service';
-import { Producto } from '../../../../core/models/catalog.model';
+import { CatalogApiService } from '../../../../core/services/catalog-api.service';
+import { Producto, GeneroProducto } from '../../../../core/models/catalog.model';
 import { ProductoFilterParams, ProductoBusquedaResponse } from '../../../../core/models/public-catalog.model';
 import { ProductCardComponent } from '../../components/product-card/product-card.component';
 import { CatalogFiltersComponent } from '../../components/catalog-filters/catalog-filters.component';
@@ -37,6 +38,42 @@ import { CatalogFiltersComponent } from '../../components/catalog-filters/catalo
               Buscar
             </button>
           </div>
+
+          <!-- Gender Quick Filter Tabs -->
+          <div class="hero-gender-tabs">
+            <button 
+              type="button" 
+              class="hero-tab-btn" 
+              [class.active]="!filters.genero"
+              (click)="onGenderTabSelect(undefined)"
+            >
+              <i class="ri-apps-2-line"></i> Toda la Moda
+            </button>
+            <button 
+              type="button" 
+              class="hero-tab-btn" 
+              [class.active]="filters.genero === 'HOMBRE'"
+              (click)="onGenderTabSelect('HOMBRE')"
+            >
+              <i class="ri-men-line"></i> Hombre
+            </button>
+            <button 
+              type="button" 
+              class="hero-tab-btn" 
+              [class.active]="filters.genero === 'MUJER'"
+              (click)="onGenderTabSelect('MUJER')"
+            >
+              <i class="ri-women-line"></i> Mujer
+            </button>
+            <button 
+              type="button" 
+              class="hero-tab-btn" 
+              [class.active]="filters.genero === 'UNISEX'"
+              (click)="onGenderTabSelect('UNISEX')"
+            >
+              <i class="ri-genderless-line"></i> Unisex
+            </button>
+          </div>
         </div>
       </div>
 
@@ -53,6 +90,16 @@ import { CatalogFiltersComponent } from '../../components/catalog-filters/catalo
 
           <!-- Products View -->
           <main class="products-main">
+            <!-- Active Collection Banner -->
+            @if (filters.coleccion_id && nombreColeccion) {
+              <div class="collection-banner">
+                <span class="collection-banner-icon"><i class="ri-bookmark-3-fill"></i></span>
+                <span>Viendo la colección <strong>{{ nombreColeccion }}</strong></span>
+                <button type="button" class="collection-banner-clear" (click)="limpiarColeccion()" title="Quitar filtro de colección">
+                  <i class="ri-close-line"></i> Ver todo
+                </button>
+              </div>
+            }
             <!-- Results Bar -->
             <div class="results-header">
               <div class="results-count">
@@ -212,15 +259,91 @@ import { CatalogFiltersComponent } from '../../components/catalog-filters/catalo
       padding: 0.6rem 1.5rem;
     }
 
+    .hero-gender-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 0.75rem;
+      margin-top: 1.75rem;
+    }
+
+    .hero-tab-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.5rem 1.25rem;
+      border-radius: var(--radius-full);
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: #f1f5f9;
+      font-size: 0.875rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all var(--transition-normal);
+
+      i {
+        font-size: 1rem;
+      }
+
+      &:hover {
+        background: rgba(255, 255, 255, 0.22);
+        color: white;
+        transform: translateY(-1px);
+      }
+
+      &.active {
+        background: white;
+        color: var(--primary);
+        border-color: white;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+        font-weight: 700;
+      }
+    }
+
     .catalog-container {
       margin-top: 2rem;
     }
 
     .catalog-layout {
       display: grid;
-      grid-template-columns: 280px 1fr;
-      gap: 2rem;
+      grid-template-columns: 260px 1fr;
+      gap: 1.5rem;
       align-items: start;
+    }
+
+    .collection-banner {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      background: linear-gradient(135deg, rgba(139,92,246,0.12), rgba(139,92,246,0.04));
+      border: 1px solid rgba(139,92,246,0.3);
+      border-radius: var(--radius-md);
+      padding: 0.65rem 1rem;
+      margin-bottom: 1rem;
+      font-size: 0.9rem;
+      color: var(--primary);
+    }
+
+    .collection-banner-icon {
+      color: #8b5cf6;
+      font-size: 1.1rem;
+    }
+
+    .collection-banner-clear {
+      margin-left: auto;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      background: white;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-full);
+      padding: 0.25rem 0.75rem;
+      font-size: 0.78rem;
+      font-weight: 600;
+      cursor: pointer;
+      color: var(--secondary);
     }
 
     .results-header {
@@ -334,6 +457,7 @@ import { CatalogFiltersComponent } from '../../components/catalog-filters/catalo
 })
 export class CatalogListComponent implements OnInit {
   private catalogService = inject(PublicCatalogService);
+  private catalogApiService = inject(CatalogApiService);
   private route = inject(ActivatedRoute);
   private router = inject(Router);
 
@@ -353,12 +477,38 @@ export class CatalogListComponent implements OnInit {
   ngOnInit(): void {
     this.route.queryParams.subscribe(params => {
       if (params['q']) this.filters.q = params['q'];
+      if (params['genero']) this.filters.genero = params['genero'] as GeneroProducto;
       if (params['categoria_id']) this.filters.categoria_id = Number(params['categoria_id']);
       if (params['temporada_id']) this.filters.temporada_id = Number(params['temporada_id']);
+      if (params['coleccion_id']) {
+        this.filters.coleccion_id = Number(params['coleccion_id']);
+        this.resolverNombreColeccion(this.filters.coleccion_id!);
+      } else {
+        this.nombreColeccion = null;
+      }
       if (params['talla_id']) this.filters.talla_id = Number(params['talla_id']);
       if (params['color_id']) this.filters.color_id = Number(params['color_id']);
       this.loadCatalog();
     });
+  }
+
+  /** Nombre de la colección activa (para el banner "Viendo colección"). */
+  public nombreColeccion: string | null = null;
+
+  private resolverNombreColeccion(id: number): void {
+    this.catalogApiService.getCollections().subscribe({
+      next: (cols) => {
+        this.nombreColeccion = (cols || []).find(c => c.id === id)?.nombre || `Colección #${id}`;
+      },
+      error: () => { this.nombreColeccion = `Colección #${id}`; }
+    });
+  }
+
+  limpiarColeccion(): void {
+    this.filters.coleccion_id = undefined;
+    this.nombreColeccion = null;
+    this.currentPage = 1;
+    this.loadCatalog();
   }
 
   loadCatalog(): void {
@@ -385,6 +535,12 @@ export class CatalogListComponent implements OnInit {
     this.loadCatalog();
   }
 
+  onGenderTabSelect(genero?: GeneroProducto): void {
+    this.filters.genero = genero;
+    this.currentPage = 1;
+    this.loadCatalog();
+  }
+
   onFiltersChanged(newFilters: ProductoFilterParams): void {
     this.filters = { ...newFilters };
     this.currentPage = 1;
@@ -402,10 +558,19 @@ export class CatalogListComponent implements OnInit {
   resetFilters(): void {
     this.filters = {
       q: '',
+      genero: undefined,
+      categoria_id: undefined,
+      temporada_id: undefined,
+      coleccion_id: undefined,
+      precio_min: undefined,
+      precio_max: undefined,
+      talla_id: undefined,
+      color_id: undefined,
       orden_por: 'recientes',
       pagina: 1,
       limite: 12
     };
+    this.nombreColeccion = null;
     this.currentPage = 1;
     this.loadCatalog();
   }

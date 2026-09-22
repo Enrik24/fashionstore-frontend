@@ -2,7 +2,13 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
-import { Cupon, CuponCreateDto, CuponUpdateDto, CuponValidacionResponse } from '../models/coupon.model';
+import {
+  Cupon,
+  CuponCreateDto,
+  CuponUpdateDto,
+  CuponValidacionResponse,
+  ValidarCuponRequest
+} from '../models/coupon.model';
 
 @Injectable({
   providedIn: 'root'
@@ -38,5 +44,18 @@ export class CouponApiService {
   validateCoupon(codigo: string, subtotal: number = 0): Observable<CuponValidacionResponse> {
     const params = new HttpParams().set('subtotal', subtotal.toString());
     return this.http.post<CuponValidacionResponse>(`${this.API_URL}/validar`, { codigo }, { params });
+  }
+
+  /**
+   * CU27: validación extendida con aplicabilidad por productos/categorías.
+   * El descuento se calcula solo sobre el subtotal de los ítems aplicables.
+   */
+  validateCouponWithItems(req: ValidarCuponRequest): Observable<CuponValidacionResponse> {
+    return this.http.post<CuponValidacionResponse>(`${this.API_URL}/validar`, req);
+  }
+
+  /** CU27: cupones vigentes y con usos disponibles para el cliente. */
+  getAvailableCoupons(): Observable<Cupon[]> {
+    return this.http.get<Cupon[]>(`${this.API_URL}/disponibles`);
   }
 }

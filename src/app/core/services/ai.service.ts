@@ -10,9 +10,13 @@ export interface ChatMessage {
   productos_sugeridos?: any[];
   sugerencias_rapidas?: string[];
   tipo_respuesta?: string;
+  accion?: string;
+  datos_reporte?: any;
+  formato_reporte?: string;
 }
 
 export interface RecomendacionesRequest {
+  cliente_id?: number;
   preferencias?: string;
   categoria_id?: number;
   estilo?: string;
@@ -32,6 +36,9 @@ export interface ChatResponse {
   productos?: any[];
   productos_mencionados?: any[];
   tipo_respuesta?: string;
+  accion?: string;
+  datos_reporte?: any;
+  formato_reporte?: string;
 }
 
 export interface VoiceReportRequest {
@@ -43,6 +50,10 @@ export interface VoiceReportResponse {
   periodo?: string;
   resumen?: string;
   datos: any;
+}
+
+export interface AudioTranscripcionResponse {
+  transcripcion: string;
 }
 
 export interface TrendAnalysisResponse {
@@ -83,6 +94,36 @@ export class AiService {
   }
 
   generateVoiceReport(transcripcion: string): Observable<VoiceReportResponse> {
-    return this.http.post<VoiceReportResponse>(`${this.API_URL}/inteligencia/reporte-voz`, { transcripcion });
+    const url = `${this.API_URL}/inteligencia/reporte-voz`;
+    const body = { transcripcion };
+    console.log('[VOZ] POST reporte-voz -> URL:', url);
+    console.log('[VOZ] POST reporte-voz -> BODY que se envia al backend:', body);
+    console.log('[VOZ] POST reporte-voz -> transcripcion:', transcripcion);
+    return this.http.post<VoiceReportResponse>(url, body);
+  }
+
+  /**
+   * Descarga el reporte de compras del cliente autenticado en PDF, EXCEL o CSV.
+   */
+  exportClientPurchasesReport(formato: 'PDF' | 'EXCEL' | 'CSV' | 'HTML' = 'PDF'): Observable<Blob> {
+    return this.http.get(`${this.API_URL}/cliente/reportes/compras/export?formato=${formato}`, {
+      responseType: 'blob'
+    });
+  }
+
+  /**
+   * Descarga el reporte de reservas del cliente autenticado en PDF, EXCEL o CSV.
+   */
+  exportClientReservationsReport(formato: 'PDF' | 'EXCEL' | 'CSV' | 'HTML' = 'PDF'): Observable<Blob> {
+    return this.http.get(`${this.API_URL}/cliente/reportes/reservas/export?formato=${formato}`, {
+      responseType: 'blob'
+    });
+  }
+
+  /**
+   * Obtiene el resumen de compras y reservas del cliente para visualización rápida.
+   */
+  getClientReportsSummary(): Observable<any> {
+    return this.http.get<any>(`${this.API_URL}/cliente/reportes/resumen`);
   }
 }

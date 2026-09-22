@@ -1,13 +1,14 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AuditService } from '../../../../core/services/audit.service';
 import { BitacoraEntry, BitacoraFilter } from '../../../../core/models/audit.model';
+import { PaginationComponent } from '../../../../shared/components/pagination/pagination.component';
 
 @Component({
   selector: 'app-audit',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, PaginationComponent],
   template: `
     <div class="audit-container animate-fade-in">
       <!-- Header -->
@@ -76,7 +77,7 @@ import { BitacoraEntry, BitacoraFilter } from '../../../../core/models/audit.mod
                 </tr>
               </thead>
               <tbody>
-                @for (entry of logs(); track entry.id) {
+                @for (entry of paginatedLogs(); track entry.id) {
                   <tr>
                     <td class="whitespace-nowrap font-mono text-xs">
                       {{ entry.created_at | date:'dd/MM/yyyy HH:mm:ss' }}
@@ -103,7 +104,7 @@ import { BitacoraEntry, BitacoraFilter } from '../../../../core/models/audit.mod
                       <span class="table-tag">{{ entry.tabla_afectada || 'General' }}</span>
                     </td>
                     <td>
-                      @if (entry.registro_id) {
+                      @if (entry.registro_id !== undefined && entry.registro_id !== null) {
                         <span class="font-mono">#{{ entry.registro_id }}</span>
                       } @else {
                         <span class="text-muted">-</span>
@@ -127,6 +128,16 @@ import { BitacoraEntry, BitacoraFilter } from '../../../../core/models/audit.mod
               </tbody>
             </table>
           </div>
+
+          <!-- Paginación de Bitácora -->
+          <app-pagination
+            [currentPage]="currentPage()"
+            [totalItems]="logs().length"
+            [pageSize]="pageSize()"
+            [pageSizeOptions]="[10, 15, 25, 50, 100]"
+            (pageChange)="onPageChange($event)"
+            (pageSizeChange)="onPageSizeChange($event)"
+          ></app-pagination>
         }
       </div>
 
@@ -147,20 +158,23 @@ import { BitacoraEntry, BitacoraFilter } from '../../../../core/models/audit.mod
                 <div><strong>Fecha:</strong> {{ selectedEntry()?.created_at | date:'dd/MM/yyyy HH:mm:ss' }}</div>
                 <div><strong>Usuario:</strong> {{ selectedEntry()?.usuario_nombre || 'Sistema' }}</div>
                 <div><strong>Tabla/Entidad:</strong> {{ selectedEntry()?.tabla_afectada || 'N/A' }}</div>
-                <div><strong>IP:</strong> {{ selectedEntry()?.ip_origen || 'N/A' }}</div>
-                <div><strong>User Agent:</strong> <span class="text-xs">{{ selectedEntry()?.user_agent || 'N/A' }}</span></div>
+                <div><strong>IP:</strong> {{ selectedEntry()?.ip_origen || selectedEntry()?.ip_address || 'N/A' }}</div>
+                <div><strong>ID Registro:</strong> {{ selectedEntry()?.registro_id !== undefined && selectedEntry()?.registro_id !== null ? '#' + selectedEntry()?.registro_id : 'N/A' }}</div>
               </div>
 
-              <div class="diff-container mt-4">
-                <div class="diff-col">
-                  <h4>Valores Anteriores</h4>
-                  <pre class="json-viewer">{{ selectedEntry()?.valores_anteriores | json }}</pre>
+              @if (tieneDiff()) {
+                <div class="diff-container mt-4">
+                  <div class="diff-col diff-col-full">
+                    <h4>Cambios (Anterior → Nuevo)</h4>
+                    <pre class="json-viewer">{{ cambiosDiff() }}</pre>
+                  </div>
                 </div>
-                <div class="diff-col">
-                  <h4>Valores Nuevos</h4>
-                  <pre class="json-viewer">{{ selectedEntry()?.valores_nuevos | json }}</pre>
+              } @else {
+                <div class="detail-box mt-4">
+                  <h4>Detalle del Evento</h4>
+                  <p class="detail-text">{{ selectedEntry()?.detalles || 'Sin detalle registrado para este evento.' }}</p>
                 </div>
-              </div>
+              }
             </div>
             <div class="modal-footer">
               <button class="btn btn-secondary" (click)="selectedEntry.set(null)">Cerrar</button>
@@ -353,7 +367,22 @@ import { BitacoraEntry, BitacoraFilter } from '../../../../core/models/audit.mod
       grid-template-columns: 1fr 1fr;
       gap: 1rem;
     }
+    .detail-box {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+    }
+    .detail-box h4 { margin: 0 0 0.5rem 0; font-size: 0.875rem; color: #475569; }
+    .detail-text {
+      margin: 0;
+      font-size: 0.875rem;
+      color: #0f172a;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
     .diff-col h4 { margin: 0 0 0.5rem 0; font-size: 0.875rem; color: #475569; }
+    .diff-col-full { grid-column: 1 / -1; }
     .json-viewer {
       background: #0f172a;
       color: #38bdf8;
@@ -372,6 +401,10 @@ export class AuditComponent implements OnInit {
   loading = signal<boolean>(false);
   selectedEntry = signal<BitacoraEntry | null>(null);
 
+  // Paginación (15 filas por defecto)
+  currentPage = signal<number>(1);
+  pageSize = signal<number>(15);
+
   filter: BitacoraFilter = {
     skip: 0,
     limit: 100,
@@ -380,6 +413,14 @@ export class AuditComponent implements OnInit {
     fecha_inicio: '',
     fecha_fin: ''
   };
+
+  paginatedLogs = computed(() => {
+    const list = this.logs();
+    const page = this.currentPage();
+    const size = this.pageSize();
+    const start = (page - 1) * size;
+    return list.slice(start, start + size);
+  });
 
   ngOnInit(): void {
     this.cargarLogs();
@@ -390,6 +431,7 @@ export class AuditComponent implements OnInit {
     this.auditService.getLogs(this.filter).subscribe({
       next: (data) => {
         this.logs.set(data);
+        this.currentPage.set(1);
         this.loading.set(false);
       },
       error: (err) => {
@@ -408,7 +450,17 @@ export class AuditComponent implements OnInit {
       fecha_inicio: '',
       fecha_fin: ''
     };
+    this.currentPage.set(1);
     this.cargarLogs();
+  }
+
+  onPageChange(page: number): void {
+    this.currentPage.set(page);
+  }
+
+  onPageSizeChange(size: number): void {
+    this.pageSize.set(size);
+    this.currentPage.set(1);
   }
 
   exportarCsv() {
@@ -425,8 +477,26 @@ export class AuditComponent implements OnInit {
     });
   }
 
-  verDetalle(entry: BitacoraEntry) {
+    verDetalle(entry: BitacoraEntry) {
     this.selectedEntry.set(entry);
+  }
+
+  /** ¿Tiene diff antes/después? (filas viejas solo traen texto en Detalles). */
+  tieneDiff(): boolean {
+    const e = this.selectedEntry();
+    return !!(e && (e.valores_anteriores || e.valores_nuevos));
+  }
+
+  /** Lista solo los campos que cambiaron: "campo: antes → después". */
+  cambiosDiff(): string {
+    const e = this.selectedEntry();
+    const ant: Record<string, any> = (e?.valores_anteriores as any) || {};
+    const nue: Record<string, any> = (e?.valores_nuevos as any) || {};
+    const keys = Array.from(new Set([...Object.keys(ant), ...Object.keys(nue)]));
+    const changed = keys.filter(k => JSON.stringify(ant[k]) !== JSON.stringify(nue[k]));
+    if (changed.length === 0) return 'Sin cambios detectados.';
+    const fmt = (v: any) => v === undefined || v === null || v === '' ? '—' : String(v);
+    return changed.map(k => `${k}: ${fmt(ant[k])} → ${fmt(nue[k])}`).join('\n');
   }
 
   getActionClass(accion: string): string {

@@ -7,6 +7,7 @@ import { ToastService } from '../../../../core/services/toast.service';
 import { Inventario, MovimientoInventario, MovimientoInventarioCreateDto, TipoMovimiento } from '../../../../core/models/inventory.model';
 import { Sucursal } from '../../../../core/models/branch.model';
 import { ModalComponent } from '../../../../shared/components/modal/modal.component';
+import { PaginationComponent } from '../../../../shared/components/pagination/pagination.component';
 import { StatusBadgePipe } from '../../../../shared/pipes/status-badge.pipe';
 
 export interface GroupedProductInventory {
@@ -28,7 +29,7 @@ export interface GroupedProductInventory {
 @Component({
   selector: 'app-inventory',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, ModalComponent, StatusBadgePipe],
+  imports: [CommonModule, ReactiveFormsModule, ModalComponent, PaginationComponent, StatusBadgePipe],
   template: `
     <div class="page-container animate-fade-in">
       <!-- Toolbar -->
@@ -113,7 +114,7 @@ export interface GroupedProductInventory {
                 type="button"
                 class="view-toggle-btn" 
                 [class.active]="viewMode() === 'accordion'"
-                (click)="viewMode.set('accordion')"
+                (click)="switchViewMode('accordion')"
                 title="Vista Acordeón Agrupado por Producto"
               >
                 <i class="ri-folder-reduce-line"></i> Agrupado
@@ -122,7 +123,7 @@ export interface GroupedProductInventory {
                 type="button"
                 class="view-toggle-btn" 
                 [class.active]="viewMode() === 'flat'"
-                (click)="viewMode.set('flat')"
+                (click)="switchViewMode('flat')"
                 title="Vista Plana Tradicional"
               >
                 <i class="ri-table-line"></i> Lista Plana
@@ -150,7 +151,7 @@ export interface GroupedProductInventory {
           <!-- VISTA ACORDEÓN AGRUPADA POR PRODUCTO -->
           @if (viewMode() === 'accordion') {
             <div class="accordion-inventory-list">
-              @for (group of groupedInventory(); track group.productId) {
+              @for (group of paginatedGroupedInventory(); track group.productId) {
                 <div class="product-accordion-item" [class.is-expanded]="isProductExpanded(group.productId)">
                   <!-- Encabezado del Acordeón (Fila de Producto) -->
                   <div class="accordion-header" (click)="toggleProduct(group.productId)">
@@ -340,7 +341,7 @@ export interface GroupedProductInventory {
                   </tr>
                 </thead>
                 <tbody>
-                  @for (item of filteredInventory(); track item.id) {
+                  @for (item of paginatedFilteredInventory(); track item.id) {
                     <tr [class.row-alert]="item.cantidad <= item.stock_minimo">
                       <td>
                         <div class="inventory-product-cell">
@@ -396,6 +397,16 @@ export interface GroupedProductInventory {
               </table>
             </div>
           }
+
+          <!-- Paginación de Inventario -->
+          <app-pagination
+            [currentPage]="currentPage()"
+            [totalItems]="viewMode() === 'accordion' ? groupedInventory().length : filteredInventory().length"
+            [pageSize]="pageSize()"
+            [pageSizeOptions]="[5, 10, 20, 50]"
+            (pageChange)="onPageChange($event)"
+            (pageSizeChange)="onPageSizeChange($event)"
+          ></app-pagination>
         }
       </div>
 
@@ -1321,6 +1332,10 @@ export class InventoryComponent implements OnInit {
   public selectedBranchFilter = signal<string>('');
   public selectedStatusFilter = signal<string>('');
 
+  // Paginación
+  public currentPage = signal<number>(1);
+  public pageSize = signal<number>(10);
+
   // Accordion & View Mode
   public viewMode = signal<'accordion' | 'flat'>('accordion');
   public expandedProductIds = signal<Set<number>>(new Set<number>());
@@ -1436,7 +1451,23 @@ export class InventoryComponent implements OnInit {
       result.push(group);
     }
 
-    return result;
+    return result.sort((a, b) => b.productId - a.productId);
+  });
+
+  public paginatedGroupedInventory = computed(() => {
+    const list = this.groupedInventory();
+    const page = this.currentPage();
+    const size = this.pageSize();
+    const start = (page - 1) * size;
+    return list.slice(start, start + size);
+  });
+
+  public paginatedFilteredInventory = computed(() => {
+    const list = this.filteredInventory();
+    const page = this.currentPage();
+    const size = this.pageSize();
+    const start = (page - 1) * size;
+    return list.slice(start, start + size);
   });
 
   ngOnInit(): void {
@@ -1446,7 +1477,7 @@ export class InventoryComponent implements OnInit {
 
   loadInventory(): void {
     this.isLoading.set(true);
-    this.inventoryApi.getGlobalInventory(0, 100).subscribe({
+    this.inventoryApi.getGlobalInventory(0, 1000).subscribe({
       next: (data) => {
         this.inventoryList.set(data);
         this.isLoading.set(false);
@@ -1457,6 +1488,11 @@ export class InventoryComponent implements OnInit {
 
   loadBranches(): void {
     this.branchApi.getBranches().subscribe(b => this.branches.set(b));
+  }
+
+  switchViewMode(mode: 'accordion' | 'flat'): void {
+    this.viewMode.set(mode);
+    this.currentPage.set(1);
   }
 
   // Accordion Controls
@@ -1492,6 +1528,7 @@ export class InventoryComponent implements OnInit {
   onSearchChange(event: Event): void {
     const val = (event.target as HTMLInputElement).value;
     this.searchQuery.set(val);
+    this.currentPage.set(1);
     if (val.trim()) {
       // Auto expand matches on search
       this.expandAll();
@@ -1501,11 +1538,22 @@ export class InventoryComponent implements OnInit {
   onBranchFilterChange(event: Event): void {
     const val = (event.target as HTMLSelectElement).value;
     this.selectedBranchFilter.set(val);
+    this.currentPage.set(1);
   }
 
   onStatusFilterChange(event: Event): void {
     const val = (event.target as HTMLSelectElement).value;
     this.selectedStatusFilter.set(val);
+    this.currentPage.set(1);
+  }
+
+  onPageChange(page: number): void {
+    this.currentPage.set(page);
+  }
+
+  onPageSizeChange(size: number): void {
+    this.pageSize.set(size);
+    this.currentPage.set(1);
   }
 
   onMovementInventoryChange(event: Event): void {

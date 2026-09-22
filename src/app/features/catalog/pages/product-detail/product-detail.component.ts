@@ -13,6 +13,10 @@ import { DisponibilidadSucursal, DisponibilidadProductoResponse } from '../../..
 import { StockAvailabilityComponent } from '../../components/stock-availability/stock-availability.component';
 import { ReservationModalComponent } from '../../components/reservation-modal/reservation-modal.component';
 import { ProductCardComponent } from '../../components/product-card/product-card.component';
+import { ProductReviewsComponent } from '../../components/product-reviews/product-reviews.component';
+import { StarRatingComponent } from '../../../../shared/components/star-rating/star-rating.component';
+import { FavoritesService } from '../../../../core/services/favorites.service';
+import { ActivePromotionsService } from '../../../../core/services/active-promotions.service';
 
 @Component({
   selector: 'app-product-detail',
@@ -23,7 +27,9 @@ import { ProductCardComponent } from '../../components/product-card/product-card
     RouterLink, 
     StockAvailabilityComponent, 
     ReservationModalComponent,
-    ProductCardComponent
+    ProductCardComponent,
+    ProductReviewsComponent,
+    StarRatingComponent
   ],
   template: `
     <div class="product-detail-page">
@@ -45,6 +51,11 @@ import { ProductCardComponent } from '../../components/product-card/product-card
             <!-- Left: Image Gallery -->
             <div class="gallery-col">
               <div class="main-image-box card">
+                @if (descuento()) {
+                  <span class="main-discount-badge">-{{ descuento() }}%</span>
+                } @else if (es2x1()) {
+                  <span class="main-discount-badge badge-2x1">2 × 1</span>
+                }
                 <img 
                   [src]="selectedImage || product.imagenes[0] || 'https://images.unsplash.com/photo-1489987707025-afc232f7ea0f?q=80&w=800&auto=format&fit=crop'" 
                   [alt]="product.nombre" 
@@ -78,14 +89,68 @@ import { ProductCardComponent } from '../../components/product-card/product-card
                   @if (product.temporada) {
                     <span class="badge badge-info">{{ product.temporada.nombre }}</span>
                   }
+                  @if (product.colecciones && product.colecciones.length > 0) {
+                    @for (col of product.colecciones; track col.id) {
+                      <a class="badge badge-collection" [routerLink]="['/catalog']" [queryParams]="{ coleccion_id: col.id }" [title]="'Ver colección ' + col.nombre">
+                        <i class="ri-bookmark-3-fill"></i> {{ col.nombre }}
+                      </a>
+                    }
+                  }
+                  @if (descuento()) {
+                    <span class="badge badge-discount"><i class="ri-price-tag-3-fill"></i> -{{ descuento() }}% DESCUENTO</span>
+                  } @else if (es2x1()) {
+                    <span class="badge badge-2x1"><i class="ri-gift-fill"></i> 2 × 1</span>
+                  }
                   <span class="product-sku">SKU: {{ product.sku }}</span>
                 </div>
 
-                <h1 class="product-title">{{ product.nombre }}</h1>
+                <div class="title-row">
+                  <h1 class="product-title">{{ product.nombre }}</h1>
+
+                  <!-- CU25: Corazón de favoritos -->
+                  <button
+                    type="button"
+                    class="favorite-btn-inline"
+                    [class.active]="esFavorito()"
+                    [title]="esFavorito() ? 'Quitar de favoritos' : 'Agregar a favoritos'"
+                    (click)="toggleFavorito()"
+                  >
+                    <i [class]="esFavorito() ? 'ri-heart-fill' : 'ri-heart-line'"></i>
+                  </button>
+                </div>
+
+                <!-- CU26: Promedio de valoraciones -->
+                <div class="rating-row">
+                  @if ((product.total_valoraciones || 0) > 0) {
+                    <app-star-rating
+                      [value]="product.promedio_valoracion || 0"
+                      [readonly]="true"
+                      [showValue]="true"
+                      [total]="product.total_valoraciones || 0"
+                      [size]="'sm'"
+                    ></app-star-rating>
+                    <button type="button" class="rating-link" (click)="scrollToReviews()">
+                      Ver las {{ product.total_valoraciones }} valoraciones
+                    </button>
+                  } @else {
+                    <span class="rating-empty"><i class="ri-star-line"></i> Sin valoraciones todavía</span>
+                  }
+                </div>
 
                 <div class="price-box">
-                  <span class="currency">Bs.</span>
-                  <span class="amount">{{ product.precio | number:'1.2-2' }}</span>
+                  @if (descuento()) {
+                    <div class="price-promo-wrapper">
+                      <span class="price-original-detail">Bs. {{ product.precio | number:'1.2-2' }}</span>
+                      <div class="price-promo-row">
+                        <span class="currency">Bs.</span>
+                        <span class="amount">{{ precioConDescuento() | number:'1.2-2' }}</span>
+                        <span class="savings-tag">Ahorras Bs. {{ (product.precio - precioConDescuento()) | number:'1.2-2' }}</span>
+                      </div>
+                    </div>
+                  } @else {
+                    <span class="currency">Bs.</span>
+                    <span class="amount">{{ product.precio | number:'1.2-2' }}</span>
+                  }
                 </div>
 
                 <div class="description-box">
@@ -203,6 +268,16 @@ import { ProductCardComponent } from '../../components/product-card/product-card
               </div>
             </div>
           }
+
+          <!-- CU26: Sección de valoraciones del producto -->
+          <div class="reviews-wrapper">
+            <app-product-reviews
+              [productoId]="product.id"
+              [promedioValoracion]="product.promedio_valoracion || 0"
+              [totalValoraciones]="product.total_valoraciones || 0"
+              (cambioValoraciones)="onValoracionesCambiadas()"
+            ></app-product-reviews>
+          </div>
         }
       </div>
 
@@ -260,6 +335,7 @@ import { ProductCardComponent } from '../../components/product-card/product-card
     }
 
     .main-image-box {
+      position: relative;
       width: 100%;
       height: 480px;
       padding: 0;
@@ -268,6 +344,63 @@ import { ProductCardComponent } from '../../components/product-card/product-card
       align-items: center;
       justify-content: center;
       background-color: #f1f5f9;
+    }
+
+    .main-discount-badge {
+      position: absolute;
+      top: 1rem;
+      left: 1rem;
+      z-index: 5;
+      background: linear-gradient(135deg, #ef4444, #dc2626);
+      color: white;
+      font-size: 0.875rem;
+      font-weight: 800;
+      padding: 0.4rem 0.85rem;
+      border-radius: var(--radius-full, 9999px);
+      box-shadow: 0 4px 14px rgba(239, 68, 68, 0.45);
+      letter-spacing: 0.05em;
+      animation: badge-pop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+
+      &.badge-2x1 {
+        background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+        box-shadow: 0 4px 14px rgba(124, 58, 237, 0.45);
+      }
+    }
+
+    .badge-discount {
+      background: #fee2e2;
+      color: #dc2626;
+      border: 1px solid #fca5a5;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+    }
+
+    .badge-2x1 {
+      background: #f3e8ff;
+      color: #7c3aed;
+      border: 1px solid #d8b4fe;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+    }
+
+    .badge-collection {
+      background: #ede9fe;
+      color: #6d28d9;
+      border: 1px solid #c4b5fd;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      text-decoration: none;
+      cursor: pointer;
+    }
+
+    .badge-collection:hover {
+      background: #ddd6fe;
     }
 
     .main-image {
@@ -310,6 +443,7 @@ import { ProductCardComponent } from '../../components/product-card/product-card
     .badges-row {
       display: flex;
       align-items: center;
+      flex-wrap: wrap;
       gap: 0.5rem;
       margin-bottom: 0.75rem;
     }
@@ -321,12 +455,77 @@ import { ProductCardComponent } from '../../components/product-card/product-card
       margin-left: auto;
     }
 
+    .title-row {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-bottom: 0.35rem;
+    }
+
     .product-title {
       font-size: 1.75rem;
       font-weight: 800;
       color: var(--primary);
       line-height: 1.25;
-      margin-bottom: 1rem;
+      margin-bottom: 0;
+    }
+
+    /* CU25: Corazón en el detalle */
+    .favorite-btn-inline {
+      width: 44px;
+      height: 44px;
+      flex-shrink: 0;
+      border-radius: 50%;
+      border: 1.5px solid var(--border-color, #e2e8f0);
+      background: #ffffff;
+      color: #94a3b8;
+      font-size: 1.35rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s ease;
+
+      &:hover { border-color: var(--accent); color: var(--accent); transform: scale(1.05); }
+
+      &.active { color: var(--accent); border-color: var(--accent); background: #fff5f7; }
+    }
+
+    /* CU26: Fila de promedio */
+    .rating-row {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      margin-bottom: 0.85rem;
+      flex-wrap: wrap;
+    }
+
+    .rating-link {
+      border: none;
+      background: none;
+      color: var(--accent);
+      font-size: 0.8125rem;
+      font-weight: 600;
+      cursor: pointer;
+      padding: 0;
+      text-decoration: underline;
+
+      &:hover { color: #9f1239; }
+    }
+
+    .rating-empty {
+      font-size: 0.8125rem;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+
+      i { color: #cbd5e1; }
+    }
+
+    .reviews-wrapper {
+      margin-top: 3rem;
     }
 
     .price-box {
@@ -334,6 +533,36 @@ import { ProductCardComponent } from '../../components/product-card/product-card
       align-items: baseline;
       gap: 0.35rem;
       margin-bottom: 1.25rem;
+    }
+
+    .price-promo-wrapper {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    .price-original-detail {
+      font-size: 1.125rem;
+      color: var(--text-muted, #94a3b8);
+      text-decoration: line-through;
+      font-weight: 600;
+    }
+
+    .price-promo-row {
+      display: flex;
+      align-items: baseline;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    .savings-tag {
+      background: #ecfdf5;
+      color: #059669;
+      font-size: 0.8125rem;
+      font-weight: 700;
+      padding: 0.25rem 0.6rem;
+      border-radius: var(--radius-full, 9999px);
+      border: 1px solid #a7f3d0;
     }
 
     .currency {
@@ -526,6 +755,8 @@ export class ProductDetailComponent implements OnInit, OnDestroy {
   private toast = inject(ToastService);
   private stockWs = inject(StockWebSocketService);
   public authService = inject(AuthService);
+  private favoritesService = inject(FavoritesService);
+  private promotionsService = inject(ActivePromotionsService);
 
   public product: Producto | null = null;
   public relatedProducts: Producto[] = [];
@@ -551,10 +782,12 @@ export class ProductDetailComponent implements OnInit, OnDestroy {
   public selectedBranchForReservation: DisponibilidadSucursal | null = null;
 
   ngOnInit(): void {
+    this.promotionsService.load();
+
     // Escuchar actualizaciones en tiempo real del WebSocket
     this.subscriptions.push(
       this.stockWs.availability$.subscribe(branches => {
-        if (branches && branches.length > 0) {
+        if (branches) {
           this.branchAvailability = branches;
         }
       }),
@@ -571,6 +804,15 @@ export class ProductDetailComponent implements OnInit, OnDestroy {
         const id = Number(params['id']);
         if (id) {
           this.loadProduct(id);
+        }
+      })
+    );
+
+    // CU26: si se navega con #reviews (por ejemplo desde "Mis Compras"), desplazar a la sección
+    this.subscriptions.push(
+      this.route.fragment.subscribe(fragment => {
+        if (fragment === 'reviews') {
+          setTimeout(() => this.scrollToReviews(), 400);
         }
       })
     );
@@ -593,6 +835,10 @@ export class ProductDetailComponent implements OnInit, OnDestroy {
         this.stockWs.connect(id);
         this.refreshAvailability();
         this.loadRelated(id);
+
+        if (this.route.snapshot.fragment === 'reviews') {
+          setTimeout(() => this.scrollToReviews(), 250);
+        }
       },
       error: () => {
         this.loading.set(false);
@@ -683,6 +929,40 @@ export class ProductDetailComponent implements OnInit, OnDestroy {
     });
   }
 
+  /** CU25: indica si el producto actual está en la lista de favoritos del cliente. */
+  esFavorito(): boolean {
+    return !!this.product && this.favoritesService.isFavorite(this.product.id);
+  }
+
+  toggleFavorito(): void {
+    if (!this.product) return;
+    this.favoritesService.toggle(this.product.id);
+  }
+
+  /** CU26: desplaza la vista a la sección de valoraciones. */
+  scrollToReviews(): void {
+    const elemento = document.getElementById('reviews');
+    if (elemento) {
+      elemento.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+
+  /** CU26: recalcula el promedio visible tras crear/editar una valoración. */
+  onValoracionesCambiadas(): void {
+    if (!this.product) return;
+
+    this.catalogService.getProductDetail(this.product.id).subscribe({
+      next: (prod) => {
+        if (!this.product) return;
+        this.product = {
+          ...this.product,
+          promedio_valoracion: prod.promedio_valoracion,
+          total_valoraciones: prod.total_valoraciones
+        };
+      }
+    });
+  }
+
   increaseQty(): void {
     this.quantity++;
   }
@@ -725,6 +1005,29 @@ export class ProductDetailComponent implements OnInit, OnDestroy {
     if (success && this.product) {
       this.refreshAvailability();
     }
+  }
+
+  descuento(): number | null {
+    if (!this.product) return null;
+    return this.promotionsService.getDiscountForProduct(
+      this.product.id,
+      this.product.categoria_id ?? this.product.categoria?.id
+    );
+  }
+
+  es2x1(): boolean {
+    if (!this.product) return false;
+    return this.promotionsService.has2x1(
+      this.product.id,
+      this.product.categoria_id ?? this.product.categoria?.id
+    );
+  }
+
+  precioConDescuento(): number {
+    if (!this.product) return 0;
+    const desc = this.descuento();
+    if (!desc) return this.product.precio;
+    return Math.round(this.product.precio * (1 - desc / 100) * 100) / 100;
   }
 
   isColorDark(hex?: string): boolean {

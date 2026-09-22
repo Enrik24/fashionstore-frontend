@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { ReservationService } from '../../../../core/services/reservation.service';
 import { BranchApiService } from '../../../../core/services/branch-api.service';
 import { ToastService } from '../../../../core/services/toast.service';
+import { AlertService } from '../../../../core/services/alert.service';
 import { Reserva, EstadoReserva } from '../../../../core/models/reservation.model';
 import { Sucursal } from '../../../../core/models/branch.model';
 import { MetodoPagoPresencial } from '../../../../core/models/cart.model';
@@ -415,6 +416,7 @@ export class BranchReservationsComponent implements OnInit {
   private resService = inject(ReservationService);
   private branchService = inject(BranchApiService);
   private toast = inject(ToastService);
+  private alertService = inject(AlertService);
 
   public reservations: Reserva[] = [];
   public branches: Sucursal[] = [];
@@ -485,8 +487,12 @@ export class BranchReservationsComponent implements OnInit {
     });
   }
 
-  cancelReservation(res: Reserva): void {
-    if (confirm(`¿Cancelar la reserva ${res.numero_reserva}?`)) {
+  async cancelReservation(res: Reserva): Promise<void> {
+    const confirmed = await this.alertService.deleteConfirm(
+      '¿Cancelar reserva?',
+      `¿Estás seguro de cancelar la reserva ${res.numero_reserva}?`
+    );
+    if (confirmed) {
       this.resService.cancelReservation(res.id).subscribe({
         next: () => {
           this.toast.info('Reserva cancelada');

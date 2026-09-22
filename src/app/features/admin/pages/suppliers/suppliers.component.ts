@@ -1,15 +1,17 @@
 import { Component, OnInit, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { RouterLink } from '@angular/router';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { SupplierApiService } from '../../../../core/services/supplier-api.service';
 import { ToastService } from '../../../../core/services/toast.service';
+import { AlertService } from '../../../../core/services/alert.service';
 import { Proveedor, ProveedorCreateDto, ProveedorUpdateDto } from '../../../../core/models/supplier.model';
 import { ModalComponent } from '../../../../shared/components/modal/modal.component';
 
 @Component({
   selector: 'app-suppliers',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, ModalComponent],
+  imports: [CommonModule, ReactiveFormsModule, RouterLink, ModalComponent],
   template: `
     <div class="page-container animate-fade-in">
       <!-- Toolbar -->
@@ -100,6 +102,9 @@ import { ModalComponent } from '../../../../shared/components/modal/modal.compon
                     </td>
                     <td>
                       <div class="action-buttons-flex">
+                        <a class="btn-action-icon" title="Historial de recepciones" [routerLink]="['/admin/receptions']" [queryParams]="{proveedorId: supplier.id}">
+                          <i class="ri-file-list-3-line"></i>
+                        </a>
                         <button class="btn-action-icon" title="Editar Proveedor" (click)="openEditSupplierModal(supplier)">
                           <i class="ri-edit-line"></i>
                         </button>
@@ -335,6 +340,7 @@ import { ModalComponent } from '../../../../shared/components/modal/modal.compon
 export class SuppliersComponent implements OnInit {
   private supplierApi = inject(SupplierApiService);
   private toast = inject(ToastService);
+  private alertService = inject(AlertService);
   private fb = inject(FormBuilder);
 
   public suppliers = signal<Proveedor[]>([]);
@@ -454,8 +460,12 @@ export class SuppliersComponent implements OnInit {
     }
   }
 
-  deleteSupplier(id: number): void {
-    if (confirm('¿Estás seguro de eliminar este proveedor?')) {
+  async deleteSupplier(id: number): Promise<void> {
+    const confirmed = await this.alertService.deleteConfirm(
+      '¿Eliminar proveedor?',
+      '¿Estás seguro de que deseas eliminar este proveedor?'
+    );
+    if (confirmed) {
       this.supplierApi.deleteSupplier(id).subscribe({
         next: () => {
           this.toast.info('Proveedor eliminado correctamente.');

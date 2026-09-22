@@ -22,14 +22,17 @@ export interface PreferenciasCliente {
 export interface ClientProfile {
   id: number;
   email: string;
+  correo?: string;
   nombre: string;
   apellido?: string;
   telefono?: string;
   ci_nit?: string;
+  nit_ci?: string;
   fecha_nacimiento?: string;
   genero?: string;
   es_activo?: boolean;
   direccion?: DireccionCliente | string;
+  direccion_envio?: string;
   preferencias?: PreferenciasCliente;
   created_at?: string;
 }
@@ -39,9 +42,11 @@ export interface UpdateProfileDto {
   apellido?: string;
   telefono?: string;
   ci_nit?: string;
+  nit_ci?: string;
   fecha_nacimiento?: string;
   genero?: string;
   direccion?: string;
+  direccion_envio?: string;
   ciudad?: string;
 }
 

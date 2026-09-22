@@ -20,6 +20,8 @@
     <app-footer></app-footer>
   }
 
-  <!-- AI Smart Fashion Stylist Assistant Widget -->
-  <app-ai-chat-widget></app-ai-chat-widget>
+  <!-- AI Smart Fashion Stylist Assistant Widget (Solo para clientes/rutas públicas) -->
+  @if (!isAdminRoute) {
+    <app-ai-chat-widget></app-ai-chat-widget>
+  }
 </div>

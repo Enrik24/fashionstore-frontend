@@ -327,30 +327,25 @@ export class ProfilePageComponent implements OnInit {
     this.loading.set(true);
     this.profileService.getProfile().subscribe({
       next: (data: any) => {
-        this.profile.set({
-          ...data,
-          email: data.correo || data.email,
-          ci_nit: data.nit_ci || data.ci_nit
-        });
+        const mapped = this.mapBackendToProfile(data);
+        this.profile.set(mapped);
         this.profileData = {
-          nombre: data.nombre || '',
-          apellido: data.apellido || '',
-          telefono: data.telefono || '',
-          ci_nit: data.nit_ci || data.ci_nit || '',
-          fecha_nacimiento: data.fecha_nacimiento || ''
+          nombre: mapped.nombre || '',
+          apellido: mapped.apellido || '',
+          telefono: mapped.telefono || '',
+          ci_nit: mapped.ci_nit || '',
+          nit_ci: mapped.ci_nit || '',
+          fecha_nacimiento: mapped.fecha_nacimiento || ''
         };
-        if (data.direccion_envio) {
-          this.addressData = { direccion: data.direccion_envio, ciudad: '', referencia: '' };
-        } else if (typeof data.direccion === 'object' && data.direccion !== null) {
-          this.addressData = { ...data.direccion };
-        } else if (typeof data.direccion === 'string') {
-          this.addressData = { direccion: data.direccion, ciudad: '', referencia: '' };
-        }
+        this.addressData = this.parseDireccionEnvio(data.direccion_envio ?? data.direccion);
         if (data.preferencias) {
           this.selectedTallas = data.preferencias.tallas_habituales || [];
           this.selectedEstilos = data.preferencias.estilos_preferidos || [];
           this.prefOfertas = data.preferencias.recibir_ofertas ?? true;
           this.prefWhatsapp = data.preferencias.notificaciones_whatsapp ?? true;
+        } else {
+          this.selectedTallas = [];
+          this.selectedEstilos = [];
         }
         this.loading.set(false);
       },
@@ -360,11 +355,73 @@ export class ProfilePageComponent implements OnInit {
     });
   }
 
+  /** Normaliza la respuesta del backend (correo/nit_ci) al modelo del frontend (email/ci_nit). */
+  private mapBackendToProfile(data: any): ClientProfile {
+    return {
+      ...data,
+      email: data.correo || data.email,
+      ci_nit: data.nit_ci || data.ci_nit,
+      nit_ci: data.nit_ci || data.ci_nit,
+      fecha_nacimiento: data.fecha_nacimiento || ''
+    } as ClientProfile;
+  }
+
+  /** Separa el string direccion_envio ("dir, ciudad (Ref: ...)") en sus 3 campos del formulario. */
+  private parseDireccionEnvio(raw: any): any {
+    const empty = { direccion: '', ciudad: '', referencia: '' };
+    if (!raw) return { ...empty };
+    if (typeof raw === 'object') {
+      return {
+        direccion: raw.direccion || raw.direccion_envio || '',
+        ciudad: raw.ciudad || '',
+        referencia: raw.referencia || ''
+      };
+    }
+    const text = String(raw);
+    let referencia = '';
+    let rest = text;
+    const refMatch = text.match(/\(Ref:\s*(.+?)\)\s*$/);
+    if (refMatch) {
+      referencia = refMatch[1].trim();
+      rest = text.slice(0, refMatch.index).trim().replace(/,\s*$/, '');
+    }
+    const parts = rest.split(',').map(p => p.trim()).filter(p => p);
+    if (parts.length <= 1) {
+      return { direccion: rest.trim(), ciudad: '', referencia };
+    }
+    const ciudad = parts.pop() as string;
+    return { direccion: parts.join(', '), ciudad, referencia };
+  }
+
   guardarPerfil() {
     this.isSavingProfile.set(true);
-    this.profileService.updateProfile(this.profileData).subscribe({
-      next: (updated) => {
-        this.profile.set(updated);
+    const payload: any = {
+      nombre: this.profileData.nombre,
+      apellido: this.profileData.apellido,
+      telefono: this.profileData.telefono || null,
+      nit_ci: this.profileData.nit_ci || this.profileData.ci_nit || null,
+      ci_nit: this.profileData.ci_nit || this.profileData.nit_ci || null,
+      fecha_nacimiento: this.profileData.fecha_nacimiento || null
+    };
+    this.profileService.updateProfile(payload).subscribe({
+      next: (updated: any) => {
+        const mapped = this.mapBackendToProfile(updated);
+        // Preservar preferencias/dirección en memoria (el PUT ya las devuelve, pero por seguridad)
+        const prev = this.profile();
+        this.profile.set({
+          ...mapped,
+          preferencias: mapped.preferencias ?? prev?.preferencias,
+          direccion_envio: (mapped as any).direccion_envio ?? (prev as any)?.direccion_envio
+        } as ClientProfile);
+        // Re-sincronizar formulario con lo guardado
+        this.profileData = {
+          nombre: mapped.nombre || '',
+          apellido: mapped.apellido || '',
+          telefono: mapped.telefono || '',
+          ci_nit: (mapped as any).ci_nit || '',
+          nit_ci: (mapped as any).ci_nit || '',
+          fecha_nacimiento: (mapped as any).fecha_nacimiento || ''
+        };
         this.toast.show('Perfil actualizado exitosamente', 'success');
         this.isSavingProfile.set(false);
       },
@@ -379,7 +436,12 @@ export class ProfilePageComponent implements OnInit {
   guardarDireccion() {
     this.isSavingAddress.set(true);
     this.profileService.updateAddress(this.addressData).subscribe({
-      next: () => {
+      next: (res: any) => {
+        // El backend devuelve direccion_envio combinada; no pisar los campos escritos por el usuario
+        if (res?.direccion_envio) {
+          const prev = this.profile();
+          this.profile.set({ ...prev, direccion_envio: res.direccion_envio } as ClientProfile);
+        }
         this.toast.show('Dirección guardada correctamente', 'success');
         this.isSavingAddress.set(false);
       },
@@ -416,14 +478,23 @@ export class ProfilePageComponent implements OnInit {
   }
 
   guardarPreferencias() {
-    this.profileService.updatePreferences({
+    const prefs = {
       tallas_habituales: this.selectedTallas,
       estilos_preferidos: this.selectedEstilos,
       recibir_ofertas: this.prefOfertas,
       notificaciones_whatsapp: this.prefWhatsapp
-    }).subscribe({
-      next: () => this.toast.show('Preferencias de moda guardadas', 'success'),
-      error: () => this.toast.show('Error al guardar preferencias', 'error')
+    };
+    this.profileService.updatePreferences(prefs).subscribe({
+      next: (res: any) => {
+        const saved = res?.preferencias ?? prefs;
+        const prev = this.profile();
+        this.profile.set({ ...prev, preferencias: saved } as ClientProfile);
+        this.toast.show('Preferencias de moda guardadas', 'success');
+      },
+      error: (err) => {
+        const msg = err.error?.detail || 'Error al guardar preferencias';
+        this.toast.show(msg, 'error');
+      }
     });
   }
 

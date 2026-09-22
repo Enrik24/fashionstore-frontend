@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Prueba Web Speech API</title>
+</head>
+<body>
+
+<h2>Prueba de reconocimiento de voz</h2>
+
+<button id="btn">🎤 Hablar</button>
+
+<p><strong>Estado:</strong> <span id="estado">Esperando...</span></p>
+<p><strong>Resultado:</strong> <span id="resultado"></span></p>
+
+<script>
+const SpeechRecognition =
+    window.SpeechRecognition ||
+    window.webkitSpeechRecognition;
+
+const estado = document.getElementById('estado');
+const resultado = document.getElementById('resultado');
+const btn = document.getElementById('btn');
+
+if (!SpeechRecognition) {
+    estado.textContent = 'Web Speech API NO disponible';
+} else {
+    estado.textContent = 'Web Speech API disponible';
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'es-US';
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.maxAlternatives = 1;
+
+    recognition.onstart = () => {
+        console.log('[TEST] onstart');
+        estado.textContent = '🎤 Escuchando...';
+    };
+
+    recognition.onaudiostart = () => {
+        console.log('[TEST] onaudiostart');
+    };
+
+    recognition.onspeechstart = () => {
+        console.log('[TEST] onspeechstart');
+    };
+
+    recognition.onspeechend = () => {
+        console.log('[TEST] onspeechend');
+        console.log('[TEST] Esperando onresult...');
+    };
+
+    recognition.onsoundend = () => {
+        console.log('[TEST] onsoundend');
+    };
+
+    recognition.onaudioend = () => {
+        console.log('[TEST] onaudioend');
+    };
+
+    recognition.onnomatch = () => {
+        console.log('[TEST] ⚠️ onnomatch -> no se encontró coincidencia');
+    };
+
+    recognition.onspeechstart = () => {
+        console.log('[TEST] onspeechstart');
+    };
+
+    recognition.onerror = (event) => {
+        console.error('[TEST] ❌ onerror');
+        console.error('[TEST] error:', event.error);
+        console.error('[TEST] message:', event.message);
+    };
+
+    recognition.onresult = (event) => {
+        console.log('[TEST] 🔥🔥🔥 ONRESULT', event);
+
+        let texto = '';
+
+        for (
+            let i = event.resultIndex;
+            i < event.results.length;
+            i++
+        ) {
+            texto += event.results[i][0].transcript;
+        }
+
+        console.log('[TEST] Transcripción:', texto);
+
+        resultado.textContent = texto;
+        estado.textContent = '✅ Transcripción recibida';
+    };
+
+    recognition.onerror = (event) => {
+        console.error('[TEST] ❌ ERROR:', event.error);
+        console.error('[TEST] Mensaje:', event.message);
+
+        estado.textContent =
+            '❌ Error: ' + event.error;
+    };
+
+    recognition.onend = () => {
+        console.log('[TEST] onend');
+        console.log('[TEST] resultado final:', resultado.textContent);
+
+        if (!resultado.textContent) {
+            estado.textContent =
+                '⚠️ Terminó sin recibir transcripción';
+        }
+    };
+
+    btn.addEventListener('click', () => {
+        console.log('[TEST] Iniciando reconocimiento...');
+
+        resultado.textContent = '';
+        estado.textContent = 'Iniciando...';
+
+        recognition.start();
+    });
+}
+</script>
+
+</body>
+</html>

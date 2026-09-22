@@ -14,8 +14,8 @@ describe('CatalogFiltersComponent', () => {
       'getCategories', 'getSeasons', 'getSizes', 'getColors'
     ]);
     mockCatalogApi.getCategories.and.returnValue(of([{ id: 1, nombre: 'Vestidos' }]));
-    mockCatalogApi.getSeasons.and.returnValue(of([{ id: 1, nombre: 'Verano 2026' }]));
-    mockCatalogApi.getSizes.and.returnValue(of([{ id: 1, nombre: 'M' }]));
+    mockCatalogApi.getSeasons.and.returnValue(of([{ id: 1, nombre: 'Verano 2026', fecha_inicio: '2026-01-01', fecha_fin: '2026-03-31' }]));
+    mockCatalogApi.getSizes.and.returnValue(of([{ id: 1, nombre: 'M', valor: 'M' }]));
     mockCatalogApi.getColors.and.returnValue(of([{ id: 1, nombre: 'Azul', codigo_hex: '#0000ff' }]));
 
     await TestBed.configureTestingModule({

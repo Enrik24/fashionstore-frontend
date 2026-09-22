@@ -13,6 +13,13 @@ export interface ProductoVendidoItem {
   unidades_vendidas: number;
 }
 
+export interface SerieDiariaPunto {
+  fecha: string;
+  total: number;
+  online: number;
+  presencial: number;
+}
+
 export interface ReporteVentas {
   periodo?: {
     inicio: string;
@@ -20,6 +27,27 @@ export interface ReporteVentas {
   };
   resumen: ReporteVentasResumen;
   top_productos?: ProductoVendidoItem[];
+  serie_diaria?: SerieDiariaPunto[];
+}
+
+export interface ReporteVentasComparativo {
+  actual: ReporteVentas;
+  anterior: ReporteVentas;
+  deltaPct: {
+    total_recaudado: number;
+    cantidad_pedidos_online: number;
+    cantidad_ventas_presenciales: number;
+    ticket_promedio: number;
+  };
+}
+
+export interface VoiceCommandPreview {
+  tipo_reporte: string;
+  interpretacion: string;
+  fecha_inicio?: string | null;
+  fecha_fin?: string | null;
+  sucursal_id?: number | null;
+  formato_sugerido?: string | null;
 }
 
 export interface InventarioDetalleItem {
@@ -40,6 +68,7 @@ export interface ReporteInventario {
   total_items_registrados: number;
   total_unidades_disponibles: number;
   items_con_bajo_stock: number;
+  limite_mostrados?: number;
   inventario?: InventarioDetalleItem[];
 }
 
@@ -47,10 +76,11 @@ export interface ReporteReservas {
   total_reservas: number;
   desglose_estados: {
     PENDIENTE?: number;
-    CONFIRMADA?: number;
-    RECOGIDA?: number;
+    PREPARADA?: number;
+    EN_PRUEBA?: number;
+    COMPLETADA?: number;
     CANCELADA?: number;
-    EXPIRADA?: number;
+    CADUCADA?: number;
     [key: string]: number | undefined;
   };
   tasa_conversion_recogida_pct: number;
@@ -61,6 +91,7 @@ export interface TopClienteItem {
   cliente_id: number;
   nombre: string;
   email: string;
+  correo?: string;
   total_pedidos: number;
   total_gastado: number;
 }
@@ -75,6 +106,9 @@ export interface ReporteFinanciero {
   ingresos: ReporteVentasResumen;
   desglose_por_metodo_pago?: Record<string, number>;
   beneficio_estimado_margen_40pct: number;
+  costo_total_bienes?: number;
+  beneficio_real?: number;
+  margen_real_pct?: number;
 }
 
 export interface KPIItem {

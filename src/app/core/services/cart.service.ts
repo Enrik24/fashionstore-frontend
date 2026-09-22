@@ -7,8 +7,7 @@ import {
   ItemCarrito,
   ItemCarritoCreate,
   ItemCarritoUpdate,
-  AplicarCuponRequest,
-  CuponValidacionResponse
+  AplicarCuponRequest
 } from '../models/cart.model';
 import { ToastService } from './toast.service';
 import { AuthService } from './auth.service';
@@ -52,18 +51,27 @@ export class CartService {
   constructor() {
     // React to authentication state changes
     effect(() => {
-      const isAuth = this.authService.isAuthenticated();
-      if (isAuth) {
-        // User logged in - load cart
+      const isClient = this.authService.isClient();
+      if (isClient) {
+        // User logged in as client - load cart
         this.loadCart().subscribe();
       } else {
-        // User logged out - clear cart
+        // User logged out or staff role without client profile (Admin, Encargado, Cajero) - clear cart
         this.cartSignal.set(null);
       }
-    });
+    }, { allowSignalWrites: true });
+  }
+
+  clearCartState(): void {
+    this.cartSignal.set(null);
   }
 
   loadCart(): Observable<Carrito | null> {
+    if (!this.authService.isClient()) {
+      this.cartSignal.set(null);
+      return of(null);
+    }
+
     this.loadingSignal.set(true);
     return this.http.get<Carrito>(`${this.API_URL}/`).pipe(
       tap((cart) => {
@@ -141,19 +149,37 @@ export class CartService {
     );
   }
 
-  applyCoupon(codigo: string): Observable<CuponValidacionResponse> {
+  applyCoupon(codigo: string): Observable<Carrito> {
     const body: AplicarCuponRequest = { codigo };
-    return this.http.post<CuponValidacionResponse>(`${this.API_URL}/aplicar-cupon`, body).pipe(
-      tap((res) => {
-        if (res.valido) {
-          this.toast.success(res.mensaje || 'Cupón aplicado exitosamente');
-          this.loadCart().subscribe();
-        } else {
-          this.toast.warning(res.mensaje || 'Cupón inválido');
-        }
+    return this.http.post<Carrito>(`${this.API_URL}/aplicar-cupon`, body).pipe(
+      tap((carrito) => {
+        this.cartSignal.set(carrito);
+        this.toast.success('Cupón aplicado exitosamente');
       }),
       catchError((err) => {
-        const msg = err.error?.detail || 'Error al aplicar cupón';
+        const msg = typeof err?.error?.detail === 'string'
+          ? err.error.detail
+          : 'Cupón inválido o no aplicable';
+        this.toast.error(msg);
+        throw err;
+      })
+    );
+  }
+
+  /** CU27: quita el cupón aplicado y restaura el total original. */
+  removeCoupon(): Observable<Carrito> {
+    this.loadingSignal.set(true);
+    return this.http.delete<Carrito>(`${this.API_URL}/remover-cupon`).pipe(
+      tap((carrito) => {
+        this.cartSignal.set(carrito);
+        this.loadingSignal.set(false);
+        this.toast.info('Cupón removido del carrito');
+      }),
+      catchError((err) => {
+        this.loadingSignal.set(false);
+        const msg = typeof err?.error?.detail === 'string'
+          ? err.error.detail
+          : 'No se pudo quitar el cupón del carrito';
         this.toast.error(msg);
         throw err;
       })

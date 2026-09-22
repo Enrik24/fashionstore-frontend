@@ -43,6 +43,13 @@ export class AuthService {
     if (!user || !user.roles) return false;
     return user.roles.some(r => r.nombre.toLowerCase() === 'cajero');
   });
+  public isClient = computed(() => {
+    const user = this.currentUserSignal();
+    if (!user || !user.roles) return false;
+    return user.roles.some(r => r.nombre.toLowerCase() === 'cliente');
+  });
+  public userSucursalId = computed(() => this.currentUserSignal()?.sucursal_id ?? null);
+  public userSucursalNombre = computed(() => this.currentUserSignal()?.sucursal_nombre ?? null);
 
   constructor() {
     // If token exists, load fresh profile

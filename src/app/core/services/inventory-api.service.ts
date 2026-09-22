@@ -18,7 +18,7 @@ export class InventoryApiService {
 
   getGlobalInventory(
     skip: number = 0, 
-    limit: number = 100, 
+    limit: number = 1000, 
     sucursalId?: number, 
     productoId?: number, 
     estado?: string
@@ -34,7 +34,7 @@ export class InventoryApiService {
     return this.http.get<Inventario[]>(`${this.API_URL}/`, { params });
   }
 
-  getBranchInventory(sucursalId: number, skip: number = 0, limit: number = 100): Observable<Inventario[]> {
+  getBranchInventory(sucursalId: number, skip: number = 0, limit: number = 1000): Observable<Inventario[]> {
     const params = new HttpParams()
       .set('skip', skip.toString())
       .set('limit', limit.toString());

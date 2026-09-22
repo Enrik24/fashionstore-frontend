@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { BranchApiService } from '../../../../core/services/branch-api.service';
 import { ToastService } from '../../../../core/services/toast.service';
+import { AlertService } from '../../../../core/services/alert.service';
 import { Ciudad, Sucursal, SucursalCreateDto, SucursalUpdateDto, CiudadCreateDto, CiudadUpdateDto } from '../../../../core/models/branch.model';
 import { ModalComponent } from '../../../../shared/components/modal/modal.component';
 import { StatusBadgePipe } from '../../../../shared/pipes/status-badge.pipe';
@@ -513,6 +514,7 @@ import { StatusBadgePipe } from '../../../../shared/pipes/status-badge.pipe';
 export class BranchesComponent implements OnInit {
   private branchApi = inject(BranchApiService);
   private toast = inject(ToastService);
+  private alertService = inject(AlertService);
   private fb = inject(FormBuilder);
 
   public activeTab = signal<'sucursales' | 'ciudades'>('sucursales');
@@ -777,8 +779,12 @@ export class BranchesComponent implements OnInit {
     }
   }
 
-  deleteCity(cityId: number): void {
-    if (confirm('¿Estás seguro de eliminar esta ciudad? Si tiene sucursales asociadas no podrá ser eliminada.')) {
+  async deleteCity(cityId: number): Promise<void> {
+    const confirmed = await this.alertService.deleteConfirm(
+      '¿Eliminar ciudad?',
+      '¿Estás seguro de eliminar esta ciudad? Si tiene sucursales asociadas no podrá ser eliminada.'
+    );
+    if (confirmed) {
       this.branchApi.deleteCity(cityId).subscribe({
         next: () => {
           this.toast.info('Ciudad eliminada.');

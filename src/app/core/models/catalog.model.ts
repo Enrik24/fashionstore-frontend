@@ -55,6 +55,7 @@ export interface ColeccionCreateDto {
 
 
 export type EstadoProducto = 'ACTIVO' | 'INACTIVO' | 'AGOTADO' | 'PROXIMO_INGRESO';
+export type GeneroProducto = 'HOMBRE' | 'MUJER' | 'UNISEX';
 
 export interface VarianteProducto {
   id: number;
@@ -63,6 +64,8 @@ export interface VarianteProducto {
   color_id: number;
   sku_variante?: string;
   precio_adicional?: number;
+  precio_variante?: number;
+  costo_variante?: number | null;
   talla?: Talla | null;
   color?: Color;
 }
@@ -73,8 +76,12 @@ export interface Producto {
   nombre: string;
   descripcion: string;
   precio: number;
+  costo_compra?: number;
   imagenes: string[];
   estado: EstadoProducto;
+  genero?: GeneroProducto;
+  promedio_valoracion?: number;
+  total_valoraciones?: number;
   categoria_id: number;
   temporada_id?: number;
   proveedor_id?: number;
@@ -82,6 +89,7 @@ export interface Producto {
   temporada?: Temporada;
   proveedor?: Proveedor;
   variantes?: VarianteProducto[];
+  colecciones?: Coleccion[];
   stock_total?: number;
 }
 
@@ -90,6 +98,7 @@ export interface StockPorSucursalItem {
   talla_id?: number | null;
   color_id?: number;
   cantidad: number;
+  costo_variante?: number | null;
 }
 
 export interface ProductoCreateDto {
@@ -97,7 +106,9 @@ export interface ProductoCreateDto {
   nombre: string;
   descripcion: string;
   precio: number;
+  costo_compra: number;
   categoria_id: number;
+  genero?: GeneroProducto;
   temporada_id?: number;
   proveedor_id?: number;
   imagenes?: string[];
@@ -109,7 +120,9 @@ export interface ProductoUpdateDto {
   nombre?: string;
   descripcion?: string;
   precio?: number;
+  costo_compra?: number;
   categoria_id?: number;
+  genero?: GeneroProducto;
   temporada_id?: number;
   proveedor_id?: number;
   imagenes?: string[];

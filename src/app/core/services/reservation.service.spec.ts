@@ -49,7 +49,7 @@ describe('ReservationService (Iteración 2 - CU12, CU14)', () => {
       detalles: [{ variante_producto_id: 101, cantidad: 1 }]
     };
 
-    service.createReservation(createData).subscribe(res => {
+    service.createReservation(createData).subscribe((res: any) => {
       expect(res.id).toBe(1);
       expect(res.numero_reserva).toBe('RES-2026-0001');
       expect(res.estado).toBe('PENDIENTE');
@@ -61,33 +61,34 @@ describe('ReservationService (Iteración 2 - CU12, CU14)', () => {
     req.flush(mockReserva);
   });
 
-  it('debe preparar, confirmar y completar una reserva por encargado (CU14)', () => {
+  it('debe preparar y completar una reserva por encargado (CU14)', () => {
     // 1. Preparar
-    service.prepareReservation(1).subscribe(res => {
-      expect(res.estado).toBe('EN_PREPARACION');
+    service.prepareReservation(1).subscribe((res: any) => {
+      expect(res.estado).toBe('PREPARADA');
     });
-    const prepReq = httpMock.expectOne(`${API_URL}/1/preparar`);
-    expect(prepReq.request.method).toBe('PUT');
-    prepReq.flush({ ...mockReserva, estado: 'EN_PREPARACION' });
+    const prepReq = httpMock.expectOne(`${API_URL}/1/estado?estado=PREPARADA`);
+    expect(prepReq.request.method).toBe('PATCH');
+    prepReq.flush({ ...mockReserva, estado: 'PREPARADA' });
 
-    // 2. Confirmar
-    service.confirmReservation(1).subscribe(res => {
-      expect(res.estado).toBe('CONFIRMADA');
+    // 2. Probar en probador
+    service.startTrialReservation(1).subscribe((res: any) => {
+      expect(res.estado).toBe('EN_PRUEBA');
     });
-    const confReq = httpMock.expectOne(`${API_URL}/1/confirmar`);
-    expect(confReq.request.method).toBe('PUT');
-    confReq.flush({ ...mockReserva, estado: 'CONFIRMADA' });
+    const trialReq = httpMock.expectOne(`${API_URL}/1/estado?estado=EN_PRUEBA`);
+    expect(trialReq.request.method).toBe('PATCH');
+    trialReq.flush({ ...mockReserva, estado: 'EN_PRUEBA' });
 
     // 3. Completar venta
     const compData: CompletarReservaRequest = {
       items: [{ detalle_reserva_id: 1, comprado: true }],
       metodo_pago: 'EFECTIVO'
     };
-    service.completeReservation(1, compData).subscribe(res => {
+    service.completeReservation(1, compData).subscribe((res: any) => {
       expect(res.estado).toBe('COMPLETADA');
     });
     const compReq = httpMock.expectOne(`${API_URL}/1/completar`);
-    expect(compReq.request.method).toBe('PUT');
+    expect(compReq.request.method).toBe('POST');
+    expect(compReq.request.body).toEqual(compData);
     compReq.flush({ ...mockReserva, estado: 'COMPLETADA' });
   });
 });

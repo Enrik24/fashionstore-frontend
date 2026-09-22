@@ -4,7 +4,7 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import { OrderService } from '../../../../core/services/order.service';
 import { CartService } from '../../../../core/services/cart.service';
 import { PaymentService } from '../../../../core/services/payment.service';
-import { Orden } from '../../../../core/models/cart.model';
+import { Comprobante, Orden } from '../../../../core/models/cart.model';
 
 @Component({
   selector: 'app-payment-success',
@@ -53,6 +53,49 @@ import { Orden } from '../../../../core/models/cart.model';
                 </div>
               }
             </div>
+
+            <!-- Comprobante / Factura Electrónica -->
+            @if (comprobante) {
+              <div class="comprobante-section">
+                <div class="comprobante-header">
+                  <i class="ri-file-text-line"></i>
+                  <span class="comprobante-title">Comprobante de Pago</span>
+                </div>
+                <div class="comprobante-details">
+                  <div class="comprobante-info">
+                    <div class="comprobante-item">
+                      <span class="comprobante-label">Número</span>
+                      <span class="comprobante-number">{{ comprobante.numero }}</span>
+                    </div>
+                    <div class="comprobante-item">
+                      <span class="comprobante-label">Tipo</span>
+                      <span class="comprobante-badge">{{ comprobante.tipo }}</span>
+                    </div>
+                    <div class="comprobante-item">
+                      <span class="comprobante-label">Emitido</span>
+                      <span class="comprobante-value">{{ comprobante.fecha_emision | date:'dd/MM/yyyy HH:mm' }}</span>
+                    </div>
+                    <div class="comprobante-item">
+                      <span class="comprobante-label">Monto</span>
+                      <span class="comprobante-value">Bs. {{ comprobante.monto_total | number:'1.2-2' }}</span>
+                    </div>
+                  </div>
+                  <button type="button" class="btn-comprobante" (click)="descargarComprobante()">
+                    <i class="ri-download-2-line"></i> Comprobante PDF
+                  </button>
+                </div>
+              </div>
+            } @else if (loadingComprobante) {
+              <p class="comprobante-note">
+                <i class="ri-loader-4-line"></i> Generando tu comprobante de pago...
+              </p>
+            } @else {
+              <p class="comprobante-note">
+                <i class="ri-information-line"></i>
+                Tu comprobante se emite automáticamente al confirmar el pago. También puedes consultarlo en
+                <a routerLink="/profile/orders">Mis Compras</a>.
+              </p>
+            }
           }
 
           <div class="actions-group">
@@ -178,6 +221,124 @@ import { Orden } from '../../../../core/models/cart.model';
 
     .font-bold { font-weight: 700; }
 
+    /* Comprobante / Factura */
+    .comprobante-section {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border-radius: var(--radius-md);
+      padding: 1.25rem;
+      margin-bottom: 2rem;
+      color: white;
+      text-align: left;
+    }
+
+    .comprobante-header {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-weight: 700;
+      font-size: 0.8125rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.75rem;
+    }
+
+    .comprobante-header i { font-size: 1.25rem; }
+
+    .comprobante-details {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .comprobante-info {
+      display: flex;
+      gap: 1.5rem;
+      flex-wrap: wrap;
+    }
+
+    .comprobante-item {
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+    }
+
+    .comprobante-label {
+      font-size: 0.7rem;
+      opacity: 0.85;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .comprobante-number {
+      font-family: monospace;
+      font-weight: 700;
+      font-size: 1.05rem;
+      letter-spacing: 0.5px;
+    }
+
+    .comprobante-value {
+      font-size: 0.875rem;
+      font-weight: 600;
+    }
+
+    .comprobante-badge {
+      align-self: flex-start;
+      background: rgba(255, 255, 255, 0.2);
+      padding: 0.2rem 0.6rem;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .btn-comprobante {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      background: white;
+      color: #667eea;
+      border: none;
+      padding: 0.55rem 1rem;
+      border-radius: var(--radius-md);
+      font-family: inherit;
+      font-size: 0.8125rem;
+      font-weight: 700;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+
+      &:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      }
+    }
+
+    .comprobante-note {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.4rem;
+      flex-wrap: wrap;
+      background: #f8fafc;
+      border: 1px dashed var(--border-color);
+      border-radius: var(--radius-md);
+      padding: 0.85rem 1rem;
+      margin-bottom: 2rem;
+      font-size: 0.8125rem;
+      color: var(--text-muted);
+
+      a {
+        color: var(--accent);
+        font-weight: 700;
+        text-decoration: none;
+
+        &:hover { text-decoration: underline; }
+      }
+    }
+
     .actions-group {
       display: flex;
       gap: 1rem;
@@ -196,6 +357,8 @@ export class PaymentSuccessComponent implements OnInit {
   private paymentService = inject(PaymentService);
 
   public order: Orden | null = null;
+  public comprobante: Comprobante | null = null;
+  public loadingComprobante = false;
 
   ngOnInit(): void {
     // Clear the cart on successful checkout
@@ -236,7 +399,42 @@ export class PaymentSuccessComponent implements OnInit {
     this.orderService.getOrderById(orderId).subscribe({
       next: (ord) => {
         this.order = ord;
+        this.loadComprobante(ord);
       }
     });
+  }
+
+  /**
+   * Obtiene el comprobante de la orden. Normalmente ya viene incluido en la
+   * orden (el backend lo genera al marcarla como PAGADO); si por una condición
+   * de carrera aún no existe, se solicita a GET /ordenes/{id}/comprobante,
+   * que lo genera/recupera en el servidor.
+   */
+  private loadComprobante(ord: Orden): void {
+    if (ord.comprobante) {
+      this.comprobante = ord.comprobante;
+      return;
+    }
+
+    this.loadingComprobante = true;
+    this.orderService.getOrderReceipt(ord.id).subscribe({
+      next: (comp) => {
+        this.comprobante = comp;
+        ord.comprobante = comp;
+        this.loadingComprobante = false;
+      },
+      error: () => {
+        this.comprobante = null;
+        this.loadingComprobante = false;
+      }
+    });
+  }
+
+  descargarComprobante(): void {
+    const ordenId = this.order?.id ?? this.comprobante?.orden_id;
+    if (!ordenId) {
+      return;
+    }
+    window.open(this.orderService.getOrderReceiptPdfUrl(ordenId), '_blank');
   }
 }

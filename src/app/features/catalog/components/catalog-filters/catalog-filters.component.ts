@@ -1,7 +1,7 @@
 import { Component, Input, Output, EventEmitter, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Categoria, Temporada, Talla, Color } from '../../../../core/models/catalog.model';
+import { Categoria, Temporada, Talla, Color, GeneroProducto, Coleccion } from '../../../../core/models/catalog.model';
 import { CatalogApiService } from '../../../../core/services/catalog-api.service';
 import { ProductoFilterParams } from '../../../../core/models/public-catalog.model';
 
@@ -18,6 +18,45 @@ import { ProductoFilterParams } from '../../../../core/models/public-catalog.mod
         <button class="btn-clear" (click)="resetFilters()" title="Limpiar filtros">
           <i class="ri-refresh-line"></i> Limpiar
         </button>
+      </div>
+
+      <!-- Gender Filter -->
+      <div class="filter-group">
+        <label class="filter-label">Género</label>
+        <div class="gender-btn-group">
+          <button 
+            type="button" 
+            class="gender-btn" 
+            [class.active]="!filters.genero"
+            (click)="selectGender(undefined)"
+          >
+            <i class="ri-apps-line"></i> Todos
+          </button>
+          <button 
+            type="button" 
+            class="gender-btn" 
+            [class.active]="filters.genero === 'HOMBRE'"
+            (click)="selectGender('HOMBRE')"
+          >
+            <i class="ri-men-line"></i> Hombre
+          </button>
+          <button 
+            type="button" 
+            class="gender-btn" 
+            [class.active]="filters.genero === 'MUJER'"
+            (click)="selectGender('MUJER')"
+          >
+            <i class="ri-women-line"></i> Mujer
+          </button>
+          <button 
+            type="button" 
+            class="gender-btn" 
+            [class.active]="filters.genero === 'UNISEX'"
+            (click)="selectGender('UNISEX')"
+          >
+            <i class="ri-genderless-line"></i> Unisex
+          </button>
+        </div>
       </div>
 
       <!-- Categories Filter -->
@@ -123,6 +162,19 @@ import { ProductoFilterParams } from '../../../../core/models/public-catalog.mod
         </div>
       }
 
+      <!-- Collections -->
+      @if (collections.length > 0) {
+        <div class="filter-group">
+          <label class="filter-label">Colección</label>
+          <select class="form-control form-control-sm" [(ngModel)]="filters.coleccion_id" (change)="onFilterChange()">
+            <option [ngValue]="undefined">Todas las colecciones</option>
+            @for (col of collections; track col.id) {
+              <option [ngValue]="col.id">{{ col.nombre }}</option>
+            }
+          </select>
+        </div>
+      }
+
       <!-- Seasons -->
       @if (seasons.length > 0) {
         <div class="filter-group">
@@ -202,6 +254,45 @@ import { ProductoFilterParams } from '../../../../core/models/public-catalog.mod
       letter-spacing: 0.05em;
       color: var(--text-muted);
       margin-bottom: 0.5rem;
+    }
+
+    .gender-btn-group {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.5rem;
+    }
+
+    .gender-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.4rem;
+      padding: 0.5rem 0.6rem;
+      font-size: 0.8125rem;
+      font-weight: 600;
+      border-radius: var(--radius-md);
+      background: #f8fafc;
+      border: 1px solid var(--border-color);
+      color: var(--secondary);
+      cursor: pointer;
+      transition: all var(--transition-fast);
+
+      i {
+        font-size: 0.95rem;
+      }
+
+      &:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+        background: rgba(225, 29, 72, 0.04);
+      }
+
+      &.active {
+        background: var(--primary);
+        color: white;
+        border-color: var(--primary);
+        box-shadow: 0 2px 6px rgba(15, 23, 42, 0.15);
+      }
     }
 
     .filter-options-list {
@@ -323,16 +414,23 @@ export class CatalogFiltersComponent implements OnInit {
   public seasons: Temporada[] = [];
   public sizes: Talla[] = [];
   public colors: Color[] = [];
+  public collections: Coleccion[] = [];
 
   ngOnInit(): void {
     this.catalogApi.getCategories().subscribe(cats => this.categories = cats);
     this.catalogApi.getSeasons().subscribe(seasons => this.seasons = seasons);
     this.catalogApi.getSizes().subscribe(sizes => this.sizes = sizes);
     this.catalogApi.getColors().subscribe(colors => this.colors = colors);
+    this.catalogApi.getCollections().subscribe(cols => this.collections = cols || []);
   }
 
   onFilterChange(): void {
     this.filtersChange.emit(this.filters);
+  }
+
+  selectGender(gender?: GeneroProducto): void {
+    this.filters.genero = gender;
+    this.onFilterChange();
   }
 
   selectSize(sizeId?: number): void {
@@ -348,8 +446,10 @@ export class CatalogFiltersComponent implements OnInit {
   resetFilters(): void {
     this.filters = {
       q: '',
+      genero: undefined,
       categoria_id: undefined,
       temporada_id: undefined,
+      coleccion_id: undefined,
       precio_min: undefined,
       precio_max: undefined,
       talla_id: undefined,

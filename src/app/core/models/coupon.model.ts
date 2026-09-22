@@ -15,6 +15,8 @@ export interface Cupon {
   estado: EstadoCupon;
   creado_por_id?: number;
   fecha_creacion?: string;
+  producto_ids?: number[];
+  categoria_ids?: number[];
 }
 
 export interface CuponCreateDto {
@@ -27,6 +29,8 @@ export interface CuponCreateDto {
   usos_maximos?: number | null;
   monto_minimo?: number | null;
   estado: EstadoCupon;
+  producto_ids?: number[];
+  categoria_ids?: number[];
 }
 
 export interface CuponUpdateDto {
@@ -39,10 +43,24 @@ export interface CuponUpdateDto {
   usos_maximos?: number | null;
   monto_minimo?: number | null;
   estado?: EstadoCupon;
+  producto_ids?: number[];
+  categoria_ids?: number[];
 }
 
 export interface AplicarCuponRequest {
   codigo: string;
+}
+
+export interface ItemValidacionCupon {
+  producto_id: number;
+  categoria_id?: number | null;
+  cantidad: number;
+  precio_unitario: number;
+}
+
+export interface ValidarCuponRequest {
+  codigo: string;
+  items?: ItemValidacionCupon[];
 }
 
 export interface CuponValidacionResponse {

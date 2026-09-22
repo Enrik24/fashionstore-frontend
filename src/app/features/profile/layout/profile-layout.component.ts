@@ -36,6 +36,12 @@ import { AuthService } from '../../../core/services/auth.service';
           <a routerLink="/profile/reservations" routerLinkActive="active" class="profile-nav-link">
             <i class="ri-calendar-check-line"></i> Mis Reservas
           </a>
+          <a routerLink="/profile/favorites" routerLinkActive="active" class="profile-nav-link">
+            <i class="ri-heart-3-line"></i> Mis Favoritos
+          </a>
+          <a routerLink="/profile/returns" routerLinkActive="active" class="profile-nav-link">
+            <i class="ri-arrow-go-back-line"></i> Mis Devoluciones
+          </a>
         </div>
       </div>
 

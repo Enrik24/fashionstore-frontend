@@ -3,7 +3,10 @@ import { CommonModule } from '@angular/common';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { CouponApiService } from '../../../../core/services/coupon-api.service';
 import { ToastService } from '../../../../core/services/toast.service';
+import { AlertService } from '../../../../core/services/alert.service';
 import { Cupon, CuponCreateDto, CuponUpdateDto, TipoCupon, EstadoCupon } from '../../../../core/models/coupon.model';
+import { Producto, Categoria } from '../../../../core/models/catalog.model';
+import { CatalogApiService } from '../../../../core/services/catalog-api.service';
 import { ModalComponent } from '../../../../shared/components/modal/modal.component';
 
 @Component({
@@ -112,6 +115,7 @@ import { ModalComponent } from '../../../../shared/components/modal/modal.compon
                 <th>Código de Cupón</th>
                 <th>Descuento</th>
                 <th>Vigencia</th>
+                <th>Aplicabilidad</th>
                 <th>Límite de Usos</th>
                 <th>Compra Mínima</th>
                 <th>Estado</th>
@@ -121,14 +125,14 @@ import { ModalComponent } from '../../../../shared/components/modal/modal.compon
             <tbody>
               @if (isLoading()) {
                 <tr>
-                  <td colspan="7" class="text-center py-8">
+                  <td colspan="8" class="text-center py-8">
                     <i class="ri-loader-4-line spin-icon text-2xl text-accent"></i>
                     <p class="text-muted mt-2">Cargando cupones de descuento...</p>
                   </td>
                 </tr>
               } @else if (filteredCoupons().length === 0) {
                 <tr>
-                  <td colspan="7" class="text-center py-8 text-muted">
+                  <td colspan="8" class="text-center py-8 text-muted">
                     <i class="ri-coupon-3-line text-3xl mb-2"></i>
                     <p>No se encontraron cupones registrados con los filtros actuales.</p>
                   </td>
@@ -165,6 +169,14 @@ import { ModalComponent } from '../../../../shared/components/modal/modal.compon
                           <span class="date-label">Hasta:</span>
                           <span class="date-val">{{ coupon.fecha_fin | date:'dd/MM/yyyy HH:mm' }}</span>
                         </div>
+                      </div>
+                    </td>
+                    <!-- CU27: Aplicabilidad por productos/categorías -->
+                    <td>
+                      <div class="applicability-chips">
+                        @for (chip of getApplicabilityChips(coupon); track chip) {
+                          <span class="app-chip">{{ chip }}</span>
+                        }
                       </div>
                     </td>
                     <td>
@@ -369,6 +381,86 @@ import { ModalComponent } from '../../../../shared/components/modal/modal.compon
               class="form-control" 
               placeholder="Ej. 20% de descuento en colección de Verano 2026"
             />
+          </div>
+
+          <!-- CU27: Aplicabilidad por productos y categorías -->
+          <div class="applicability-section">
+            <div class="section-title-row">
+              <h4 class="form-section-title"><i class="ri-filter-3-line"></i> Aplicabilidad del Cupón</h4>
+              <span class="text-xs text-muted">Si no seleccionas productos ni categorías, el cupón aplica a todo el catálogo.</span>
+            </div>
+
+            @if (!couponHasApplicability()) {
+              <div class="advertencia-box">
+                <i class="ri-information-line"></i>
+                <span>Sin restricción de productos: el cupón aplicará a todo el catálogo.</span>
+              </div>
+            }
+
+            <div class="applicability-grid">
+              <div class="selector-panel">
+                <div class="selector-header">
+                  <span class="selector-title"><i class="ri-t-shirt-2-line"></i> Productos ({{ couponSelectedProducts().length }})</span>
+                </div>
+                <div class="search-input-box small">
+                  <i class="ri-search-line search-icon"></i>
+                  <input
+                    type="text"
+                    class="form-control with-icon"
+                    placeholder="Buscar producto por nombre o SKU..."
+                    [value]="couponProductSearch()"
+                    (input)="onCouponProductSearchChange($event)"
+                  />
+                </div>
+                <div class="checkbox-list">
+                  @for (product of filteredCouponProducts(); track product.id) {
+                    <label class="checkbox-row">
+                      <input
+                        type="checkbox"
+                        [checked]="isCouponSelected('producto_ids', product.id)"
+                        (change)="toggleCouponSelection('producto_ids', product.id)"
+                      />
+                      <span class="checkbox-label">{{ product.nombre }}</span>
+                      <small class="text-muted">{{ product.sku }}</small>
+                    </label>
+                  } @empty {
+                    <span class="text-xs text-muted">No se encontraron productos.</span>
+                  }
+                </div>
+                @if (couponSelectedProducts().length > 0) {
+                  <div class="selected-chips">
+                    @for (product of couponSelectedProducts(); track product.id) {
+                      <span class="chip">
+                        {{ product.nombre }}
+                        <button type="button" class="chip-close" (click)="toggleCouponSelection('producto_ids', product.id)">
+                          <i class="ri-close-line"></i>
+                        </button>
+                      </span>
+                    }
+                  </div>
+                }
+              </div>
+
+              <div class="selector-panel">
+                <div class="selector-header">
+                  <span class="selector-title"><i class="ri-apps-2-line"></i> Categorías ({{ couponSelectedCategories().length }})</span>
+                </div>
+                <div class="checkbox-list compact">
+                  @for (category of couponCategories; track category.id) {
+                    <label class="checkbox-row">
+                      <input
+                        type="checkbox"
+                        [checked]="isCouponSelected('categoria_ids', category.id)"
+                        (change)="toggleCouponSelection('categoria_ids', category.id)"
+                      />
+                      <span class="checkbox-label">{{ category.nombre }}</span>
+                    </label>
+                  } @empty {
+                    <span class="text-xs text-muted">No hay categorías registradas.</span>
+                  }
+                </div>
+              </div>
+            </div>
           </div>
 
           <div class="modal-actions-box">
@@ -619,6 +711,149 @@ import { ModalComponent } from '../../../../shared/components/modal/modal.compon
       min-width: 40px;
     }
 
+    /* CU27: Aplicabilidad en tabla y formulario */
+    .applicability-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.3rem;
+      max-width: 240px;
+    }
+
+    .app-chip {
+      background: #f1f5f9;
+      color: #475569;
+      border-radius: 6px;
+      padding: 0.15rem 0.45rem;
+      font-size: 0.7rem;
+      font-weight: 600;
+    }
+
+    .applicability-section {
+      border-top: 1px solid #f1f5f9;
+      padding-top: 1rem;
+    }
+
+    .section-title-row {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 0.75rem;
+      margin-bottom: 0.6rem;
+      flex-wrap: wrap;
+    }
+
+    .form-section-title {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: #0f172a;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      margin: 0;
+    }
+
+    .form-section-title i { color: #0f172a; }
+
+    .advertencia-box {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: #f1f5f9;
+      color: #475569;
+      border-radius: 10px;
+      padding: 0.6rem 0.8rem;
+      font-size: 0.8125rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .applicability-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+
+    .selector-panel {
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 0.85rem;
+      background: #fcfdff;
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+
+    .selector-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .selector-title {
+      font-size: 0.8125rem;
+      font-weight: 700;
+      color: #334155;
+    }
+
+    .selector-title i { color: #64748b; margin-right: 0.25rem; }
+
+    .checkbox-list {
+      max-height: 190px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+      padding-right: 0.25rem;
+    }
+
+    .checkbox-list.compact { max-height: 130px; }
+
+    .checkbox-row {
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+      font-size: 0.8125rem;
+      color: #334155;
+      cursor: pointer;
+      padding: 0.2rem 0.25rem;
+      border-radius: 6px;
+    }
+
+    .checkbox-row:hover { background: #f1f5f9; }
+    .checkbox-label { flex: 1; }
+
+    .selected-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.3rem;
+      margin-top: 0.35rem;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      background: #e0e7ff;
+      color: #4338ca;
+      border-radius: 999px;
+      padding: 0.15rem 0.5rem;
+      font-size: 0.7rem;
+      font-weight: 600;
+    }
+
+    .chip-close {
+      border: none;
+      background: none;
+      color: inherit;
+      cursor: pointer;
+      padding: 0;
+      font-size: 0.8rem;
+      line-height: 1;
+    }
+
+    @media (max-width: 900px) {
+      .applicability-grid { grid-template-columns: 1fr; }
+    }
+
     .date-val {
       font-weight: 500;
       color: var(--primary, #0f172a);
@@ -854,7 +1089,9 @@ import { ModalComponent } from '../../../../shared/components/modal/modal.compon
 })
 export class CouponsComponent implements OnInit {
   private couponApi = inject(CouponApiService);
+  private catalogApi = inject(CatalogApiService);
   private toast = inject(ToastService);
+  private alertService = inject(AlertService);
   private fb = inject(FormBuilder);
 
   public coupons = signal<Cupon[]>([]);
@@ -878,8 +1115,15 @@ export class CouponsComponent implements OnInit {
     fecha_fin: ['', [Validators.required]],
     usos_maximos: [null],
     monto_minimo: [null],
-    estado: ['ACTIVO', [Validators.required]]
+    estado: ['ACTIVO', [Validators.required]],
+    producto_ids: [[] as number[]],
+    categoria_ids: [[] as number[]]
   });
+
+  // CU27: catálogo para aplicabilidad
+  public couponProducts: Producto[] = [];
+  public couponCategories: Categoria[] = [];
+  public couponProductSearch = signal<string>('');
 
   // KPI Computeds
   public totalCoupons = computed(() => this.coupons().length);
@@ -915,6 +1159,87 @@ export class CouponsComponent implements OnInit {
 
   ngOnInit(): void {
     this.loadCoupons();
+    this.loadCouponCatalogData();
+  }
+
+  /** CU27: precarga productos y categorías para los selectores de aplicabilidad. */
+  loadCouponCatalogData(): void {
+    this.catalogApi.getProducts(0, 500).subscribe({
+      next: (products) => this.couponProducts = products || [],
+      error: () => this.couponProducts = []
+    });
+
+    this.catalogApi.getCategories().subscribe({
+      next: (categories) => this.couponCategories = categories || [],
+      error: () => this.couponCategories = []
+    });
+  }
+
+  /** CU27: chips de aplicabilidad mostrados en la tabla. */
+  getApplicabilityChips(coupon: Cupon): string[] {
+    const chips: string[] = [];
+    const productos = coupon.producto_ids || [];
+
+    if (productos.length === 1) {
+      const nombre = this.couponProducts.find(p => p.id === productos[0])?.nombre;
+      chips.push(nombre ? `1 producto: ${nombre}` : `1 producto (#${productos[0]})`);
+    } else if (productos.length > 1) {
+      chips.push(`${productos.length} productos`);
+    }
+
+    const categorias = coupon.categoria_ids || [];
+    categorias.forEach(id => {
+      const nombre = this.couponCategories.find(c => c.id === id)?.nombre;
+      chips.push(nombre ? `Categoría: ${nombre}` : `Categoría #${id}`);
+    });
+
+    if (chips.length === 0) {
+      chips.push('Todo el catálogo');
+    }
+
+    return chips;
+  }
+
+  onCouponProductSearchChange(event: Event): void {
+    this.couponProductSearch.set((event.target as HTMLInputElement).value);
+  }
+
+  public filteredCouponProducts = computed(() => {
+    const term = this.couponProductSearch().trim().toLowerCase();
+    const list = term
+      ? this.couponProducts.filter(p =>
+          p.nombre.toLowerCase().includes(term) || (p.sku || '').toLowerCase().includes(term)
+        )
+      : this.couponProducts;
+    return list.slice(0, 80);
+  });
+
+  public couponSelectedProducts = computed(() => {
+    const ids = (this.couponForm.get('producto_ids')?.value as number[]) || [];
+    return this.couponProducts.filter(p => ids.includes(p.id));
+  });
+
+  public couponSelectedCategories = computed(() => {
+    const ids = (this.couponForm.get('categoria_ids')?.value as number[]) || [];
+    return this.couponCategories.filter(c => ids.includes(c.id));
+  });
+
+  public couponHasApplicability = computed(() => {
+    const productos = (this.couponForm.get('producto_ids')?.value as number[]) || [];
+    const categorias = (this.couponForm.get('categoria_ids')?.value as number[]) || [];
+    return productos.length > 0 || categorias.length > 0;
+  });
+
+  isCouponSelected(field: 'producto_ids' | 'categoria_ids', id: number): boolean {
+    const current = (this.couponForm.get(field)?.value as number[]) || [];
+    return current.includes(id);
+  }
+
+  toggleCouponSelection(field: 'producto_ids' | 'categoria_ids', id: number): void {
+    const control = this.couponForm.get(field);
+    if (!control) return;
+    const current = (control.value as number[]) || [];
+    control.setValue(current.includes(id) ? current.filter(x => x !== id) : [...current, id]);
   }
 
   loadCoupons(): void {
@@ -986,6 +1311,7 @@ export class CouponsComponent implements OnInit {
   openCreateCouponModal(): void {
     this.isEditingCoupon.set(false);
     this.selectedCouponId.set(null);
+    this.couponProductSearch.set('');
 
     const now = new Date();
     const nextMonth = new Date();
@@ -1000,7 +1326,9 @@ export class CouponsComponent implements OnInit {
       fecha_fin: this.formatDateForInput(nextMonth),
       usos_maximos: null,
       monto_minimo: null,
-      estado: 'ACTIVO'
+      estado: 'ACTIVO',
+      producto_ids: [],
+      categoria_ids: []
     });
 
     this.isCouponModalOpen.set(true);
@@ -1009,6 +1337,7 @@ export class CouponsComponent implements OnInit {
   openEditCouponModal(coupon: Cupon): void {
     this.isEditingCoupon.set(true);
     this.selectedCouponId.set(coupon.id);
+    this.couponProductSearch.set('');
 
     this.couponForm.patchValue({
       codigo: coupon.codigo,
@@ -1019,7 +1348,9 @@ export class CouponsComponent implements OnInit {
       fecha_fin: this.formatDateForInput(new Date(coupon.fecha_fin)),
       usos_maximos: coupon.usos_maximos ?? null,
       monto_minimo: coupon.monto_minimo ?? null,
-      estado: coupon.estado
+      estado: coupon.estado,
+      producto_ids: coupon.producto_ids || [],
+      categoria_ids: coupon.categoria_ids || []
     });
 
     this.isCouponModalOpen.set(true);
@@ -1059,7 +1390,9 @@ export class CouponsComponent implements OnInit {
         fecha_fin: endDate.toISOString(),
         usos_maximos: formVal.usos_maximos ? Number(formVal.usos_maximos) : null,
         monto_minimo: formVal.monto_minimo ? Number(formVal.monto_minimo) : null,
-        estado: formVal.estado
+        estado: formVal.estado,
+        producto_ids: formVal.producto_ids || [],
+        categoria_ids: formVal.categoria_ids || []
       };
 
       this.couponApi.updateCoupon(couponId, updateDto).subscribe({
@@ -1086,7 +1419,9 @@ export class CouponsComponent implements OnInit {
         fecha_fin: endDate.toISOString(),
         usos_maximos: formVal.usos_maximos ? Number(formVal.usos_maximos) : null,
         monto_minimo: formVal.monto_minimo ? Number(formVal.monto_minimo) : null,
-        estado: formVal.estado
+        estado: formVal.estado,
+        producto_ids: formVal.producto_ids || [],
+        categoria_ids: formVal.categoria_ids || []
       };
 
       this.couponApi.createCoupon(createDto).subscribe({
@@ -1120,8 +1455,12 @@ export class CouponsComponent implements OnInit {
     });
   }
 
-  deleteCoupon(coupon: Cupon): void {
-    if (confirm(`¿Estás seguro de que deseas eliminar el cupón "${coupon.codigo}"?`)) {
+  async deleteCoupon(coupon: Cupon): Promise<void> {
+    const confirmed = await this.alertService.deleteConfirm(
+      '¿Eliminar cupón?',
+      `¿Estás seguro de que deseas eliminar el cupón "${coupon.codigo}"?`
+    );
+    if (confirmed) {
       this.couponApi.deleteCoupon(coupon.id).subscribe({
         next: () => {
           this.toast.success(`Cupón ${coupon.codigo} eliminado correctamente.`);

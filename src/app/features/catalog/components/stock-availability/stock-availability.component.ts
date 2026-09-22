@@ -26,13 +26,13 @@ import * as L from 'leaflet';
         </div>
       </div>
 
-      <!-- Loading State -->
-      @if (loading) {
+      <!-- Loading State (only on initial empty load) -->
+      @if (loading && branchList.length === 0) {
         <div class="loading-state">
           <i class="ri-loader-4-line spin-icon"></i>
           <span>Consultando stock en tiempo real...</span>
         </div>
-      } @else if (branchList.length === 0) {
+      } @else if (!loading && branchList.length === 0) {
         <div class="empty-state">
           <i class="ri-information-line"></i>
           <span>No hay información de sucursales disponible para esta variante.</span>
@@ -98,8 +98,15 @@ import * as L from 'leaflet';
         @if (branchesWithLocation.length > 0) {
           <div class="map-section">
             <div class="map-header">
-              <i class="ri-map-pin-line"></i>
-              <span>Ubicación de sucursales</span>
+              <div class="map-header-left">
+                <i class="ri-map-pin-line"></i>
+                <span>Ubicación de sucursales</span>
+              </div>
+              @if (loading) {
+                <span class="updating-badge">
+                  <i class="ri-loader-4-line spin-icon"></i> Actualizando...
+                </span>
+              }
             </div>
             <div #mapContainer class="map-container"></div>
           </div>
@@ -484,6 +491,7 @@ import * as L from 'leaflet';
     .map-header {
       display: flex;
       align-items: center;
+      justify-content: space-between;
       gap: 0.5rem;
       font-size: 0.85rem;
       font-weight: 600;
@@ -492,6 +500,25 @@ import * as L from 'leaflet';
 
       i {
         color: var(--accent);
+      }
+    }
+
+    .map-header-left {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .updating-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      font-size: 0.75rem;
+      font-weight: 500;
+      color: var(--accent);
+
+      .spin-icon {
+        font-size: 0.875rem;
       }
     }
 
@@ -605,11 +632,18 @@ export class StockAvailabilityComponent implements AfterViewInit, OnChanges, OnD
   }
 
   ngOnChanges(changes: SimpleChanges): void {
-    if (changes['branchList'] && !changes['branchList'].firstChange) {
-      if (this.map) {
+    if (changes['branchList']) {
+      if (this.map && this.mapContainer) {
         this.updateMarkers();
       } else if (this.branchesWithLocation.length > 0) {
         setTimeout(() => this.initMap(), 0);
+      }
+    }
+    if (changes['loading'] && !this.loading) {
+      if (!this.map && this.branchesWithLocation.length > 0) {
+        setTimeout(() => this.initMap(), 0);
+      } else if (this.map) {
+        setTimeout(() => this.map?.invalidateSize(), 50);
       }
     }
   }
@@ -622,28 +656,37 @@ export class StockAvailabilityComponent implements AfterViewInit, OnChanges, OnD
   }
 
   get branchesWithLocation(): DisponibilidadSucursal[] {
-    return this.branchList.filter(b => this.hasLocation(b));
+    return (this.branchList || []).filter(b => this.hasLocation(b));
   }
 
   private initMap(): void {
-    if (!this.mapContainer || this.branchesWithLocation.length === 0) return;
+    if (!this.mapContainer?.nativeElement || this.branchesWithLocation.length === 0) return;
 
-    const firstBranch = this.branchesWithLocation[0];
-    this.map = L.map(this.mapContainer.nativeElement).setView(
-      [firstBranch.latitud!, firstBranch.longitud!],
-      12
-    );
+    if (this.map) {
+      this.map.remove();
+      this.map = null;
+    }
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-      maxZoom: 19
-    }).addTo(this.map);
+    try {
+      const firstBranch = this.branchesWithLocation[0];
+      this.map = L.map(this.mapContainer.nativeElement).setView(
+        [firstBranch.latitud!, firstBranch.longitud!],
+        12
+      );
 
-    this.updateMarkers();
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        maxZoom: 19
+      }).addTo(this.map);
 
-    setTimeout(() => {
-      this.map?.invalidateSize();
-    }, 100);
+      this.updateMarkers();
+
+      setTimeout(() => {
+        this.map?.invalidateSize();
+      }, 100);
+    } catch (e) {
+      console.error('Error inicializando mapa Leaflet:', e);
+    }
   }
 
   private updateMarkers(): void {
@@ -697,5 +740,9 @@ export class StockAvailabilityComponent implements AfterViewInit, OnChanges, OnD
     if (bounds.length > 0) {
       this.map.fitBounds(bounds as L.LatLngBoundsExpression, { padding: [30, 30] });
     }
+
+    setTimeout(() => {
+      this.map?.invalidateSize();
+    }, 50);
   }
 }

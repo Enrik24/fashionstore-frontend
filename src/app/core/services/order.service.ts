@@ -1,5 +1,5 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { Orden, OrdenCreateFromCarrito, Comprobante } from '../models/cart.model';
@@ -17,6 +17,12 @@ export class OrderService {
 
   getMyOrders(): Observable<Orden[]> {
     return this.http.get<Orden[]>(`${this.API_URL}/`);
+  }
+
+  /** Lista todas las órdenes (Admin/Encargado/Cajero ven todo; Cliente solo las suyas). Máx 50 por el backend. */
+  listAllOrders(skip: number = 0, limit: number = 50): Observable<Orden[]> {
+    const params = new HttpParams().set('skip', skip.toString()).set('limit', limit.toString());
+    return this.http.get<Orden[]>(`${this.API_URL}/`, { params });
   }
 
   getOrderById(id: number): Observable<Orden> {

@@ -85,6 +85,21 @@ export const routes: Routes = [
         path: 'reservations',
         loadComponent: () => import('./features/branch-manager/pages/reservations/branch-reservations.component').then(m => m.BranchReservationsComponent),
         title: 'FashionStore - Reservas en Sucursal'
+      },
+      {
+        path: 'returns',
+        loadComponent: () => import('./features/branch-manager/pages/returns/branch-returns.component').then(m => m.BranchReturnsComponent),
+        title: 'FashionStore - Revisión de Devoluciones (CU28)'
+      },
+      {
+        path: 'inventory',
+        loadComponent: () => import('./features/branch-manager/pages/inventory/branch-inventory.component').then(m => m.BranchInventoryComponent),
+        title: 'FashionStore - Inventario de Sucursal'
+      },
+      {
+        path: 'sales',
+        loadComponent: () => import('./features/branch-manager/pages/sales/branch-sales.component').then(m => m.BranchSalesComponent),
+        title: 'FashionStore - Ventas de Sucursal'
       }
     ]
   },
@@ -139,6 +154,21 @@ export const routes: Routes = [
         path: 'reservations',
         loadComponent: () => import('./features/profile/pages/reservations-history/reservations-history.component').then(m => m.ReservationsHistoryComponent),
         title: 'FashionStore - Mis Reservas en Tienda'
+      },
+      {
+        path: 'favorites',
+        loadComponent: () => import('./features/profile/pages/favorites/favorites-page.component').then(m => m.FavoritesPageComponent),
+        title: 'FashionStore - Mis Favoritos (CU25)'
+      },
+      {
+        path: 'returns',
+        loadComponent: () => import('./features/profile/pages/returns/my-returns.component').then(m => m.MyReturnsComponent),
+        title: 'FashionStore - Mis Devoluciones (CU28)'
+      },
+      {
+        path: 'returns/new/:orderId',
+        loadComponent: () => import('./features/profile/pages/returns/request-return.component').then(m => m.RequestReturnComponent),
+        title: 'FashionStore - Solicitar Devolución o Cambio (CU28)'
       }
     ]
   },
@@ -183,9 +213,24 @@ export const routes: Routes = [
         title: 'FashionStore Admin - Proveedores'
       },
       {
+        path: 'receptions',
+        loadComponent: () => import('./features/admin/pages/receptions/receptions.component').then(m => m.ReceptionsComponent),
+        title: 'FashionStore Admin - Recepciones por Proveedor'
+      },
+      {
         path: 'inventory',
         loadComponent: () => import('./features/admin/pages/inventory/inventory.component').then(m => m.InventoryComponent),
         title: 'FashionStore Admin - Gestión de Inventario'
+      },
+      {
+        path: 'sales',
+        loadComponent: () => import('./features/admin/pages/sales/sales.component').then(m => m.SalesComponent),
+        title: 'FashionStore Admin - Ventas Realizadas'
+      },
+      {
+        path: 'reservations',
+        loadComponent: () => import('./features/admin/pages/reservations/reservations.component').then(m => m.ReservationsComponent),
+        title: 'FashionStore Admin - Reservas Realizadas'
       },
       {
         path: 'product-attributes',
@@ -196,6 +241,11 @@ export const routes: Routes = [
         path: 'coupons',
         loadComponent: () => import('./features/admin/pages/coupons/coupons.component').then(m => m.CouponsComponent),
         title: 'FashionStore Admin - Cupones de Descuento (CU18)'
+      },
+      {
+        path: 'promotions',
+        loadComponent: () => import('./features/admin/pages/promotions/promotions.component').then(m => m.PromotionsComponent),
+        title: 'FashionStore Admin - Promociones (CU24)'
       },
       {
         path: 'reports',

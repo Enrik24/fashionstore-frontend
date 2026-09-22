@@ -1,4 +1,4 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
@@ -123,6 +123,56 @@ import { Orden } from '../../../../core/models/cart.model';
 
             <!-- Right: Order Summary & Place Order -->
             <div class="checkout-summary-col">
+              <!-- CU27: bloque de cupón en checkout -->
+              <div class="coupon-card card">
+                <h3 class="summary-title">
+                  <i class="ri-coupon-3-line"></i> ¿Tienes un Cupón?
+                </h3>
+
+                @if (cartService.cartSignal()?.cupon) {
+                  <div class="applied-coupon-badge">
+                    <i class="ri-check-line"></i>
+                    <span>Cupón activo: <strong>{{ cartService.cartSignal()?.cupon?.codigo }}</strong></span>
+                    <button
+                      type="button"
+                      class="remove-coupon-btn"
+                      title="Quitar cupón del carrito"
+                      [disabled]="removingCoupon"
+                      (click)="removeCoupon()"
+                    >
+                      <i class="ri-close-line"></i>
+                    </button>
+                  </div>
+                } @else {
+                  <p class="coupon-hint">Ingresa tu código promocional para obtener descuentos adicionales.</p>
+                  <div class="coupon-input-group secondary">
+                    <input
+                      type="text"
+                      class="form-control"
+                      placeholder="Código (ej. VERANO20)"
+                      [(ngModel)]="couponCode"
+                      (keyup.enter)="applyCoupon()"
+                    />
+                    <button
+                      class="btn btn-primary"
+                      [disabled]="!couponCode || applyingCoupon"
+                      (click)="applyCoupon()"
+                    >
+                      @if (applyingCoupon) {
+                        <i class="ri-loader-4-line spin-icon"></i>
+                      } @else {
+                        Aplicar
+                      }
+                    </button>
+                  </div>
+                  @if (couponError()) {
+                    <div class="coupon-error">
+                      <i class="ri-error-warning-line"></i> {{ couponError() }}
+                    </div>
+                  }
+                }
+              </div>
+
               <div class="summary-card card">
                 <h3 class="summary-title">Resumen de la Orden</h3>
 
@@ -147,7 +197,12 @@ import { Orden } from '../../../../core/models/cart.model';
                   </div>
                   @if (cartService.discountSignal() > 0) {
                     <div class="calc-row discount">
-                      <span>Descuento cupón</span>
+                      <span>
+                        Descuento cupón
+                        @if (cartService.cartSignal()?.cupon) {
+                          <span class="coupon-code">({{ cartService.cartSignal()?.cupon?.codigo }})</span>
+                        }
+                      </span>
                       <span>- Bs. {{ cartService.discountSignal() | number:'1.2-2' }}</span>
                     </div>
                   }
@@ -329,6 +384,60 @@ import { Orden } from '../../../../core/models/cart.model';
       padding: 1.5rem;
     }
 
+    /* CU27: bloque de cupón en checkout */
+    .coupon-card {
+      padding: 1.5rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .coupon-hint {
+      font-size: 0.8125rem;
+      color: var(--text-muted);
+      margin: 0 0 0.6rem 0;
+    }
+
+    .coupon-input-group.secondary {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .applied-coupon-badge {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      color: var(--success);
+      margin: 0;
+    }
+
+    .remove-coupon-btn {
+      margin-left: auto;
+      border: none;
+      background: none;
+      color: inherit;
+      cursor: pointer;
+      font-size: 1rem;
+      line-height: 1;
+      padding: 0.15rem;
+      border-radius: 6px;
+
+      &:hover { background: rgba(0, 0, 0, 0.06); }
+      &:disabled { opacity: 0.5; cursor: not-allowed; }
+    }
+
+    .coupon-code {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .coupon-error {
+      margin-top: 0.6rem;
+      font-size: 0.8125rem;
+      color: var(--danger, #e11d48);
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+    }
+
     .summary-title {
       font-size: 1.15rem;
       font-weight: 700;
@@ -444,6 +553,12 @@ export class CheckoutPageComponent implements OnInit {
   public branches: Sucursal[] = [];
   public processingPayment: boolean = false;
 
+  /** CU27: estado del bloque de cupón en checkout. */
+  public couponCode: string = '';
+  public applyingCoupon: boolean = false;
+  public removingCoupon: boolean = false;
+  public couponError = signal<string | null>(null);
+
   ngOnInit(): void {
     if (!this.authService.isAuthenticated()) {
       this.toast.info('Inicia sesión para proceder con el pago');
@@ -469,6 +584,43 @@ export class CheckoutPageComponent implements OnInit {
       return false;
     }
     return true;
+  }
+
+  /** CU27: aplica el cupón digitado usando el mismo flujo del carrito. */
+  applyCoupon(): void {
+    if (!this.couponCode.trim()) return;
+
+    this.applyingCoupon = true;
+    this.couponError.set(null);
+
+    this.cartService.applyCoupon(this.couponCode.trim()).subscribe({
+      next: () => {
+        this.applyingCoupon = false;
+        this.couponCode = '';
+      },
+      error: (err) => {
+        this.applyingCoupon = false;
+        const msg = typeof err?.error?.detail === 'string'
+          ? err.error.detail
+          : 'Cupón inválido o no aplicable';
+        this.couponError.set(msg);
+      }
+    });
+  }
+
+  /** CU27: quita el cupón aplicado y restaura el total original. */
+  removeCoupon(): void {
+    this.removingCoupon = true;
+    this.couponError.set(null);
+
+    this.cartService.removeCoupon().subscribe({
+      next: () => {
+        this.removingCoupon = false;
+      },
+      error: () => {
+        this.removingCoupon = false;
+      }
+    });
   }
 
   processCheckout(): void {

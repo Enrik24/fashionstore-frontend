@@ -1,8 +1,9 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { ProfileService } from '../../../../core/services/profile.service';
 import { OrderService } from '../../../../core/services/order.service';
+import { ToastService } from '../../../../core/services/toast.service';
 import { OrderHistoryItem } from '../../../../core/models/profile.model';
 
 @Component({
@@ -60,6 +61,20 @@ import { OrderHistoryItem } from '../../../../core/models/profile.model';
               <!-- Expanded Details -->
               @if (expandedOrders().has(order.id)) {
                 <div class="order-body animate-fade-in">
+              <!-- Acciones de la orden (CU26 / CU28) -->
+              <div class="order-actions">
+                <button
+                  class="btn btn-outline-accent btn-sm"
+                  [disabled]="!esOrdenDevolvible(order)"
+                  [title]="esOrdenDevolvible(order) ? 'Solicitar devolución o cambio de prendas' : tituloNoDevolvible(order)"
+                  (click)="irASolicitarDevolucion(order)"
+                >
+                  <i class="ri-arrow-go-back-line"></i> Solicitar devolución/cambio
+                </button>
+                @if (!esOrdenDevolvible(order)) {
+                  <span class="action-hint">{{ tituloNoDevolvible(order) }}</span>
+                }
+              </div>
                   <!-- Comprobante Section -->
                   @if (order.comprobante) {
                     <div class="comprobante-section">
@@ -131,6 +146,17 @@ import { OrderHistoryItem } from '../../../../core/models/profile.model';
                           <div class="item-subtotal">
                             Bs. {{ (item.subtotal || (item.precio_unitario * item.cantidad) || 0) | number:'1.2-2' }}
                           </div>
+                          @if (esOrdenValorable(order) && getProductoId(item)) {
+                            <div class="item-action">
+                              <button
+                                class="btn btn-sm btn-outline-accent"
+                                title="Valorar este producto"
+                                (click)="irAValorar(item); $event.stopPropagation()"
+                              >
+                                <i class="ri-star-line"></i> Valorar
+                              </button>
+                            </div>
+                          }
                         </div>
                       } @empty {
                         <p class="text-sm text-muted py-2">Detalle de prendas no disponible.</p>
@@ -245,6 +271,22 @@ import { OrderHistoryItem } from '../../../../core/models/profile.model';
     .badge-sub { font-size: 0.7rem; background: #e2e8f0; padding: 0.1rem 0.35rem; border-radius: 4px; color: #475569; }
     .item-qty { font-size: 0.875rem; color: #64748b; font-weight: 500; }
     .item-subtotal { font-weight: 700; font-size: 0.9375rem; color: #0f172a; }
+    .item-action { margin-left: auto; display: flex; align-items: center; }
+
+    /* CU26 / CU28: acciones por orden */
+    .order-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      margin-bottom: 1rem;
+      padding: 0.6rem 0.75rem;
+      background: #ffffff;
+      border: 1px dashed #cbd5e1;
+      border-radius: 8px;
+    }
+
+    .action-hint { font-size: 0.75rem; color: #94a3b8; }
     .badge { padding: 0.25rem 0.6rem; border-radius: 6px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; }
     .badge-success { background: #dcfce7; color: #15803d; }
     .badge-warning { background: #fef3c7; color: #b45309; }
@@ -324,7 +366,13 @@ import { OrderHistoryItem } from '../../../../core/models/profile.model';
 export class OrdersHistoryComponent implements OnInit {
   private profileService = inject(ProfileService);
   private orderService = inject(OrderService);
+  private router = inject(Router);
+  private toast = inject(ToastService);
 
+  /** Plazo máximo en días para solicitar devoluciones/cambios (CU28, espejo de `PLAZO_DEVOLUCION_DIAS` del backend). */
+  public readonly PLAZO_DEVOLUCION_DIAS = 30;
+  /** Estados de orden que permiten solicitar devoluciones y valorar productos (CU26/CU28). */
+  private readonly ESTADOS_PERMITIDOS = ['PAGADO', 'EN_PROCESO', 'ENVIADO', 'ENTREGADO'];
   orders = signal<any[]>([]);
   loading = signal<boolean>(true);
   expandedOrders = signal<Set<number>>(new Set());
@@ -386,5 +434,58 @@ export class OrdersHistoryComponent implements OnInit {
   descargarComprobante(ordenId: number): void {
     const url = this.orderService.getOrderReceiptPdfUrl(ordenId);
     window.open(url, '_blank');
+  }
+
+  /** ID del producto de un ítem de la orden (forma pública o admin de la API). */
+  getProductoId(item: any): number | null {
+    const id = item.variante_producto?.producto?.id ?? item.producto_id ?? null;
+    return typeof id === 'number' ? id : null;
+  }
+
+  /** CU26: la orden puede valorarse si está pagada o en proceso de entrega. */
+  esOrdenValorable(order: any): boolean {
+    const estado = String(order?.estado || '').toUpperCase();
+    return this.ESTADOS_PERMITIDOS.includes(estado);
+  }
+
+  /** CU28: la orden es devolvible si puede valorarse y aún está dentro del plazo de devolución. */
+  esOrdenDevolvible(order: any): boolean {
+    if (!this.esOrdenValorable(order)) return false;
+
+    const fecha = order?.fecha || order?.created_at;
+    if (!fecha) return false;
+
+    const compra = new Date(fecha).getTime();
+    if (!Number.isFinite(compra)) return false;
+
+    const diasTranscurridos = (Date.now() - compra) / 86400000;
+    return diasTranscurridos <= this.PLAZO_DEVOLUCION_DIAS;
+  }
+
+  /** CU28: mensaje informativo cuando la orden no admite devoluciones. */
+  tituloNoDevolvible(order: any): string {
+    if (!this.esOrdenValorable(order)) {
+      return `Las devoluciones solo aplican para órdenes pagadas o en proceso de entrega (estado actual: ${order?.estado || 'desconocido'})`;
+    }
+    return `El plazo de devolución de ${this.PLAZO_DEVOLUCION_DIAS} días ya venció para esta orden`;
+  }
+
+  /** CU26: abre el detalle del producto directamente en la sección de valoraciones. */
+  irAValorar(item: any): void {
+    const productoId = this.getProductoId(item);
+    if (!productoId) {
+      this.toast.error('No se pudo identificar el producto a valorar.');
+      return;
+    }
+    this.router.navigate(['/catalog', productoId], { fragment: 'reviews' });
+  }
+
+  /** CU28: abre el wizard de solicitud de devolución/cambio para la orden seleccionada. */
+  irASolicitarDevolucion(order: any): void {
+    if (!this.esOrdenDevolvible(order)) {
+      this.toast.warning(this.tituloNoDevolvible(order));
+      return;
+    }
+    this.router.navigate(['/profile/returns/new', order.id]);
   }
 }

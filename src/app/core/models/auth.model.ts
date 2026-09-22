@@ -35,4 +35,6 @@ export interface UserProfile {
   fecha_registro: string;
   ultimo_acceso?: string;
   roles: { id: number; nombre: string; descripcion?: string }[];
+  sucursal_id?: number;
+  sucursal_nombre?: string;
 }
