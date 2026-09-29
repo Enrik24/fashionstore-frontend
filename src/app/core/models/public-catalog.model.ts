@@ -25,8 +25,10 @@ export interface ProductoBusquedaResponse {
 export interface DisponibilidadSucursal {
   sucursal_id: number;
   sucursal_nombre: string;
+  cantidad?: number;
   cantidad_disponible: number;
   cantidad_reservada: number;
+  cantidad_vendida?: number;
   estado: string;
   latitud?: number | null;
   longitud?: number | null;

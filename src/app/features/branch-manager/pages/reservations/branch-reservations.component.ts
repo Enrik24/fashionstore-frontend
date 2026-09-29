@@ -114,7 +114,7 @@ import { MetodoPagoPresencial } from '../../../../core/models/cart.model';
                         <small class="text-muted">({{ det.variante_producto?.talla?.valor || det.variante_producto?.talla?.nombre }} / {{ det.variante_producto?.color?.nombre }})</small>
                       }
                     </span>
-                    <span class="badge badge-info">{{ det.estado }}</span>
+                    <span class="badge" [ngClass]="getDetalleBadgeClass(det.estado)">{{ det.estado }}</span>
                   </div>
                 }
               </div>
@@ -458,6 +458,18 @@ export class BranchReservationsComponent implements OnInit {
       case 'CANCELADA':
       case 'CADUCADA': return 'badge-danger';
       default: return 'badge-primary';
+    }
+  }
+
+  getDetalleBadgeClass(status: string): string {
+    // Una reserva mezcla prendas PENDIENTE / PREPARADO / EN_PRUEBA / COMPRADO / DEVUELTO.
+    switch (status) {
+      case 'PENDIENTE': return 'badge-warning';
+      case 'PREPARADO': return 'badge-info';
+      case 'EN_PRUEBA': return 'badge-primary';
+      case 'COMPRADO': return 'badge-success';
+      case 'DEVUELTO': return 'badge-neutral';
+      default: return 'badge-info';
     }
   }
 

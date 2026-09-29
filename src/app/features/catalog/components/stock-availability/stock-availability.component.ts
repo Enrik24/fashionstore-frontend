@@ -167,11 +167,17 @@ import * as L from 'leaflet';
                     }
                   </td>
 
-                  <!-- Stock Quantity -->
+                  <!-- Stock Quantity: disponible / reservada / vendida por sucursal -->
                   <td class="text-center font-bold">
                     <span [class.stock-zero]="item.cantidad_disponible <= 0" [class.stock-ok]="item.cantidad_disponible > 0">
-                      {{ item.cantidad_disponible }}
+                      {{ item.cantidad_disponible }} disp.
                     </span>
+                    @if (item.cantidad_reservada > 0) {
+                      <div><small class="text-muted">{{ item.cantidad_reservada }} reserv.</small></div>
+                    }
+                    @if ((item.cantidad_vendida ?? 0) > 0) {
+                      <div><small class="text-muted">{{ item.cantidad_vendida }} vend.</small></div>
+                    }
                   </td>
 
                   <!-- Actions: Map Link & Reserve -->
