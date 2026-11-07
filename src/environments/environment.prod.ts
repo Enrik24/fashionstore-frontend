@@ -11,13 +11,36 @@ export const environment = {
   allowedImageTypes: ['image/jpeg', 'image/png', 'image/webp'],
   enableDebugMode: false,
   stripePublishableKey: 'pk_test_51TNvrQDe1EbPeXeBixY8e7HDgNYN50bZQ1TA4173nShEEaZ4wLG79EbCR4CiV000OefzFlD3vq1NsBm88OnADdtp00vRTDFePe', // Reemplazar por pk_live_... en producción real
+  // [EXAMEN-2] Variables del capítulo 14 del plan de frontend.
+  saasEnabled: true,
+  offlineEnabled: true,
+  offlineDbNombre: 'fashionstore_offline',
+  offlineDbVersion: 1,
+  offlineLoteMaxOperaciones: 50,
+  offlineBackoffBaseSeg: 5,
+  offlineBackoffMaxSeg: 300,
+  offlineMaxMbLocal: 50,
+  offlineRetencionDias: 90,
+  offlinePinLongitudMin: 6,
+  offlinePinMaxIntentos: 5,
+  syncIntervaloSeg: 60,
+  pagoDiferidoVigenciaHoras: 24,
+  pagoDiferidoMaxReintentos: 5,
+  stripeModo: 'payment-intent' as 'payment-intent' | 'redirect',
+  analiticaCacheTtlSeg: 300,
+  reporteVozIdioma: 'es-BO',
+  reporteIaMaxFilas: 5000,
+  exportMaxMb: 50,
+  mostrarDiagnosticoOffline: false,
   firebase: {
-    apiKey: "AIzaSy_FashionStoreKey",
-    authDomain: "fashionstore-app.firebaseapp.com",
-    projectId: "fashionstore-app",
-    storageBucket: "fashionstore-app.appspot.com",
-    messagingSenderId: "100000000000",
-    appId: "1:100000000000:web:fashionstore",
-    vapidKey: "BAFJmPeDjgxtCWHwfUqEshQX14COoKZXQlIR9v6lekq80P5v6dNyY03Y-5WCmOk1ziu8O-OqiEWA3BmhauT-AbY"
+    apiKey: "AIzaSyAuagxPaCqtiJM6fESxc58fV2a1dtrlIMQ",
+    authDomain: "tiendaropass.firebaseapp.com",
+    projectId: "tiendaropass",
+    storageBucket: "tiendaropass.firebasestorage.app",
+    messagingSenderId: "1079388804040",
+    appId: "1:1079388804040:web:8a4f8d8278bd8453bee6fd",
+    measurementId: "G-J5MFGS72V9",
+    vapidKey: "BG2E2Mn14-onW4ftPnHSyvdlQwAcSZyRcf4k25odkxihVf3byhahTv2KBW_ezIuJ99_cRcuDMKDkhM7FaWvFWgo"
   }
+  
 };

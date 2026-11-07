@@ -1,7 +1,10 @@
 import { Producto, VarianteProducto } from './catalog.model';
 import { Sucursal } from './branch.model';
 
-export type TipoMovimiento = 'ENTRADA' | 'SALIDA' | 'AJUSTE' | 'VENTA' | 'RESERVA' | 'DEVOLUCION' | 'TRANSFERENCIA';
+export type TipoMovimiento = 'ENTRADA' | 'SALIDA' | 'AJUSTE' | 'VENTA' | 'RESERVA' | 'DEVOLUCION' | 'TRANSFERENCIA'
+  // [EXAMEN-2] Tipos de movimiento nuevos (traspasos, merma, cambios y reposiciones).
+  | 'TRASPASO_SALIDA' | 'TRASPASO_ENTRADA' | 'MERMA' | 'CAMBIO' | 'REPOSICION_ENTRADA' | 'REPOSICION_SALIDA';
+
 export type EstadoInventario = 'DISPONIBLE' | 'BAJO_STOCK' | 'AGOTADO';
 
 /** Variante con producto anidado, tal como lo devuelve VarianteProductoDetalleResponse */
@@ -23,6 +26,10 @@ export interface Inventario {
   variante_producto?: VarianteConProducto;
   sucursal?: Sucursal;
   estado?: EstadoInventario;
+  // [EXAMEN-2]
+  tenant_id?: number | null;
+  version?: number;
+  updated_at?: string;
 }
 
 export interface InventarioUpdateDto {
@@ -40,6 +47,9 @@ export interface MovimientoInventario {
   fecha: string;
   usuario_id?: number;
   inventario?: Inventario;
+  // [EXAMEN-2]
+  tenant_id?: number | null;
+  referencia_uuid?: string | null;
 }
 
 export interface MovimientoInventarioCreateDto {

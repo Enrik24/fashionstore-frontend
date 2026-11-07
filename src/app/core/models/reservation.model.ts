@@ -27,6 +27,8 @@ export interface ReservaCreate {
   horario_aproximado?: string;
   notas?: string;
   detalles: DetalleReservaCreate[];
+  // [EXAMEN-2] El backend acepta el cliente que reserva (CU06).
+  cliente_id?: number | null;
 }
 
 export interface Reserva {
@@ -42,6 +44,11 @@ export interface Reserva {
   detalles: DetalleReserva[];
   sucursal?: Sucursal;
   cliente?: UserProfile;
+  // [EXAMEN-2] Reserva offline (CU06).
+  uuid_reserva?: string;
+  es_offline?: boolean;
+  estado_sincronizacion?: string;
+  tenant_id?: number | null;
 }
 
 export interface ItemCompletarReserva {

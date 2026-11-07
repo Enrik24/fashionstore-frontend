@@ -35,6 +35,8 @@ export interface ClientProfile {
   direccion_envio?: string;
   preferencias?: PreferenciasCliente;
   created_at?: string;
+  // [EXAMEN-2]
+  tenant_id?: number | null;
 }
 
 export interface UpdateProfileDto {

@@ -19,6 +19,8 @@ export interface Talla {
   nombre?: string;
   tipo?: string;
   descripcion?: string;
+  // [EXAMEN-2]
+  orden?: number;
 }
 
 export interface Color {
@@ -68,6 +70,11 @@ export interface VarianteProducto {
   costo_variante?: number | null;
   talla?: Talla | null;
   color?: Color;
+  // [EXAMEN-2] Sincronización incremental y aislamiento por tenant.
+  tenant_id?: number | null;
+  version?: number;
+  updated_at?: string;
+  deleted_at?: string | null;
 }
 
 export interface Producto {
@@ -91,6 +98,14 @@ export interface Producto {
   variantes?: VarianteProducto[];
   colecciones?: Coleccion[];
   stock_total?: number;
+  // [EXAMEN-2] Tipo de tela, composición y descarga incremental.
+  tenant_id?: number | null;
+  version?: number;
+  updated_at?: string;
+  deleted_at?: string | null;
+  tipo_tela_id?: number | null;
+  composicion?: string | null;
+  tipo_tela?: import('./tipo-tela.model').TipoTela | null;
 }
 
 export interface StockPorSucursalItem {
@@ -114,6 +129,9 @@ export interface ProductoCreateDto {
   imagenes?: string[];
   estado?: EstadoProducto;
   stock_por_sucursal?: StockPorSucursalItem[];
+  // [EXAMEN-2] Punto 3: tipo de tela y composición.
+  tipo_tela_id?: number | null;
+  composicion?: string | null;
 }
 
 export interface ProductoUpdateDto {
@@ -127,4 +145,7 @@ export interface ProductoUpdateDto {
   proveedor_id?: number;
   imagenes?: string[];
   estado?: EstadoProducto;
+  // [EXAMEN-2] Punto 3: tipo de tela y composición.
+  tipo_tela_id?: number | null;
+  composicion?: string | null;
 }

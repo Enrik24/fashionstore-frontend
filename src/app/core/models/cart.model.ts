@@ -5,7 +5,10 @@ export type TipoCupon = 'PORCENTAJE' | 'MONTO_FIJO';
 export type EstadoCupon = 'ACTIVO' | 'INACTIVO' | 'AGOTADO' | 'EXPIRADO';
 export type EstadoCarrito = 'ACTIVO' | 'ABANDONADO' | 'CONVERTIDO';
 export type TipoOrden = 'DIGITAL' | 'PRESENCIAL';
-export type EstadoOrden = 'PENDIENTE' | 'CONFIRMADA' | 'EN_PREPARACION' | 'ENVIADA' | 'ENTREGADA' | 'CANCELADA';
+export type EstadoOrden = 'PENDIENTE' | 'CONFIRMADA' | 'EN_PREPARACION' | 'ENVIADA' | 'ENTREGADA' | 'CANCELADA'
+  // [EXAMEN-2]
+  | 'SINCRONIZANDO' | 'PENDIENTE_PAGO_DIFERIDO' | 'PAGO_DIFERIDO_CONFIRMADO' | 'EXPIRADA';
+
 export type TipoComprobante = 'FACTURA' | 'RECIBO';
 export type MetodoPagoPresencial = 'EFECTIVO' | 'TARJETA_POS' | 'QR';
 
@@ -52,6 +55,9 @@ export interface ItemCarrito {
   precio_unitario: number;
   subtotal: number;
   variante_producto?: VarianteResumen;
+  // [EXAMEN-2]
+  precio_unitario_local?: number;
+  stock_local_conocido?: number;
 }
 
 export interface ItemCarritoCreate {
@@ -74,6 +80,13 @@ export interface Carrito {
   subtotal: number;
   total: number;
   cupon?: Cupon;
+  // [EXAMEN-2] Carrito offline persistente (CU15).
+  uuid_carrito?: string;
+  dispositivo_id?: string;
+  es_offline?: boolean;
+  estado_sincronizacion?: string;
+  tenant_id?: number | null;
+  sello_local?: string;
 }
 
 export interface DetalleOrden {
@@ -111,6 +124,14 @@ export interface Orden {
   direccion_envio?: string;
   detalles: DetalleOrden[];
   comprobante?: Comprobante;
+  // [EXAMEN-2] Orden local y pago diferido (CU15/CU16).
+  uuid_orden?: string;
+  uuid_pago?: string;
+  dispositivo_id?: string;
+  es_offline?: boolean;
+  estado_sincronizacion?: string;
+  expira_en?: string;
+  tenant_id?: number | null;
 }
 
 export interface OrdenCreateFromCarrito {

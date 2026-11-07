@@ -4,13 +4,14 @@ importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-com
 
 // Configuración básica para inicializar en el Service Worker
 firebase.initializeApp({
-  apiKey: "AIzaSy_FashionStorePlaceholderKey",
-  authDomain: "fashionstore.firebaseapp.com",
-  projectId: "fashionstore-app",
-  storageBucket: "fashionstore.appspot.com",
-  messagingSenderId: "100000000000",
-  appId: "1:100000000000:web:fashionstore"
+  apiKey: "AIzaSyAuagxPaCqtiJM6fESxc58fV2a1dtrlIMQ",
+  authDomain: "tiendaropass.firebaseapp.com",
+  projectId: "tiendaropass",
+  storageBucket: "tiendaropass.firebasestorage.app",
+  messagingSenderId: "1079388804040",
+  appId: "1:1079388804040:web:8a4f8d8278bd8453bee6fd",
 });
+
 
 const messaging = firebase.messaging();
 

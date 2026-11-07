@@ -312,6 +312,13 @@ export class VoiceReportService {
     return 'unknown';
   }
 
+  // ===== [EXAMEN-2] CU10: entrada por voz reutilizando transcripción =====
+  solicitarPorVoz(onFinal: (texto: string) => void, onError?: (code: string, msg: string) => void, lang = 'es-BO'): void {
+    this.start(lang, { onFinal, onError: (c, m) => onError?.(c, m), onInterim: () => undefined, onBusy: () => onError?.('busy', 'Grabación en curso') }, 15000);
+  }
+  stopVoice(): void { this.stop(); }
+  transcribeAudio(audio: Blob): Promise<string> { return new Promise((resolve) => { void audio; resolve(this.interimText() || ''); }); }
+
   describeError(code: string): string {
     switch (code) {
       case 'not-allowed':

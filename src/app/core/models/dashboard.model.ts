@@ -22,6 +22,8 @@ export interface DashboardFilters {
   fechaFin: string;
   sucursalId?: number;
   comparar: boolean;
+  // [EXAMEN-2]
+  tenantId?: number | null;
 }
 
 export interface WidgetState<T> {
@@ -29,6 +31,9 @@ export interface WidgetState<T> {
   data: T | null;
   error?: string;
   updatedAt?: Date;
+  // [EXAMEN-2] Métricas de modelo y sello de generación.
+  generadoEn?: string;
+  metricas?: { rmse?: number; accuracy?: number; silhouette?: number };
 }
 
 export interface DashboardLayout {

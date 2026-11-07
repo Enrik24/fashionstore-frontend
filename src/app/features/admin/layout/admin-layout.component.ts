@@ -5,11 +5,14 @@ import { AuthService } from '../../../core/services/auth.service';
 import { InventoryApiService } from '../../../core/services/inventory-api.service';
 import { Inventario } from '../../../core/models/inventory.model';
 import { BreadcrumbsComponent } from '../../../shared/components/breadcrumbs/breadcrumbs.component';
+import { TenantBadgeComponent } from '../../../shared/components/tenant-badge/tenant-badge.component';
+import { PendingPaymentService } from '../../../core/offline/pending-payment.service'; // [EXAMEN-2]
+import { SyncEngineService } from '../../../core/offline/sync-engine.service'; // [EXAMEN-2]
 
 @Component({
   selector: 'app-admin-layout',
   standalone: true,
-  imports: [CommonModule, RouterOutlet, RouterLink, RouterLinkActive, BreadcrumbsComponent],
+  imports: [CommonModule, RouterOutlet, RouterLink, RouterLinkActive, BreadcrumbsComponent, TenantBadgeComponent],
   template: `
     <div class="admin-wrapper">
       <!-- Admin Sidebar -->
@@ -142,6 +145,68 @@ import { BreadcrumbsComponent } from '../../../shared/components/breadcrumbs/bre
               <span>Bitácora de Auditoría</span>
             }
           </a>
+
+          <!-- [EXAMEN-2] CU04: configuración del tenant y suscripción -->
+          <div class="nav-section-title" *ngIf="!isSidebarCollapsed()">PLATAFORMA & SUSCRIPCIÓN</div>
+
+          <a routerLink="/admin/configuracion" routerLinkActive="active" class="sidebar-link" title="Configuración inicial de la empresa (CU04)">
+            <i class="ri-settings-4-line"></i>
+            @if (!isSidebarCollapsed()) {
+              <span>Configuración</span>
+            }
+          </a>
+
+          <a routerLink="/admin/mi-suscripcion" routerLinkActive="active" class="sidebar-link" title="Plan, vigencia y pagos (CU04)">
+            <i class="ri-calendar-check-line"></i>
+            @if (!isSidebarCollapsed()) {
+              <span>Mi suscripción</span>
+            }
+          </a>
+
+          <a routerLink="/admin/tipos-tela" routerLinkActive="active" class="sidebar-link" title="Tipos de tela y composición (CU04)">
+            <i class="ri-price-tag-3-line"></i>
+            @if (!isSidebarCollapsed()) {
+              <span>Tipos de tela</span>
+            }
+          </a>
+
+          <!-- [EXAMEN-2] CU08 / CU16: operación offline y cobros diferidos -->
+          <div class="nav-section-title" *ngIf="!isSidebarCollapsed()">OPERACIÓN OFFLINE</div>
+
+          <a routerLink="/admin/pagos-pendientes" routerLinkActive="active" class="sidebar-link" title="Pagos diferidos, conciliación y reembolsos (CU16)">
+            <i class="ri-bank-card-2-line"></i>
+            @if (!isSidebarCollapsed()) {
+              <span>Pagos diferidos</span>
+              @if (pendingPayments.pagosPendientes() > 0) {
+                <span class="sidebar-badge">{{ pendingPayments.pagosPendientes() }}</span>
+              }
+            }
+          </a>
+
+          <a routerLink="/offline/sincronizacion" routerLinkActive="active" class="sidebar-link" title="Cola FIFO y conflictos (CU08, CU09)">
+            <i class="ri-loop-left-line"></i>
+            @if (!isSidebarCollapsed()) {
+              <span>Sincronización</span>
+              @if (syncEngine.pendientes() + syncEngine.conflictosPendientes() > 0) {
+                <span class="sidebar-badge">{{ syncEngine.pendientes() + syncEngine.conflictosPendientes() }}</span>
+              }
+            }
+          </a>
+
+          <a routerLink="/offline/descarga" routerLinkActive="active" class="sidebar-link" title="Datos offline del dispositivo (CU05)">
+            <i class="ri-download-cloud-2-line"></i>
+            @if (!isSidebarCollapsed()) {
+              <span>Datos offline</span>
+            }
+          </a>
+
+          <!-- [EXAMEN-2] CU10/CU12/CU14/CU19/CU20 -->
+          <div class="nav-section-title" *ngIf="!isSidebarCollapsed()">ANALÍTICA Y OPERACIONES</div>
+          <a routerLink="/admin/reportes-ia" routerLinkActive="active" class="sidebar-link"><i class="ri-sparkling-line"></i>@if (!isSidebarCollapsed()) { <span>Reportes IA</span> }</a>
+          <a routerLink="/admin/analitica" routerLinkActive="active" class="sidebar-link"><i class="ri-bar-chart-2-line"></i>@if (!isSidebarCollapsed()) { <span>Analítica</span> }</a>
+          <a routerLink="/admin/traspasos" routerLinkActive="active" class="sidebar-link"><i class="ri-arrow-left-right-line"></i>@if (!isSidebarCollapsed()) { <span>Traspasos</span> }</a>
+          <a routerLink="/admin/compensaciones" routerLinkActive="active" class="sidebar-link"><i class="ri-refund-2-line"></i>@if (!isSidebarCollapsed()) { <span>Compensaciones</span> }</a>
+          <a routerLink="/admin/respaldos" routerLinkActive="active" class="sidebar-link"><i class="ri-database-2-line"></i>@if (!isSidebarCollapsed()) { <span>Respaldos</span> }</a>
         </nav>
 
 
@@ -164,6 +229,9 @@ import { BreadcrumbsComponent } from '../../../shared/components/breadcrumbs/bre
           </div>
 
           <div class="topbar-right">
+            <!-- [EXAMEN-2] CU04: plan y estado de la suscripción del tenant -->
+            <app-tenant-badge [compacto]="true"></app-tenant-badge>
+
             <div class="admin-badge">
               <i class="ri-shield-check-line text-success"></i>
               <span>Sesión Administrador</span>
@@ -281,6 +349,23 @@ import { BreadcrumbsComponent } from '../../../shared/components/breadcrumbs/bre
                     <div class="item-text">
                       <span class="item-title">Ver Tienda Pública</span>
                       <span class="item-subtitle">Ir al catálogo de clientes</span>
+                    </div>
+                  </a>
+
+                  <!-- [EXAMEN-2] CU17: PIN y dispositivos autorizados -->
+                  <a routerLink="/profile/offline" class="dropdown-item" (click)="closeUserMenu()">
+                    <i class="ri-shield-keyhole-line item-icon"></i>
+                    <div class="item-text">
+                      <span class="item-title">Seguridad offline</span>
+                      <span class="item-subtitle">PIN y dispositivos autorizados</span>
+                    </div>
+                  </a>
+
+                  <a routerLink="/admin/mi-suscripcion" class="dropdown-item" (click)="closeUserMenu()">
+                    <i class="ri-calendar-check-line item-icon"></i>
+                    <div class="item-text">
+                      <span class="item-title">Mi suscripción</span>
+                      <span class="item-subtitle">Plan, límites y pagos</span>
                     </div>
                   </a>
 
@@ -461,6 +546,22 @@ import { BreadcrumbsComponent } from '../../../shared/components/breadcrumbs/bre
         color: white;
         box-shadow: 0 4px 12px var(--accent-glow);
       }
+    }
+
+    /* [EXAMEN-2] RF-030: contadores de sincronización y pagos en el menú */
+    .sidebar-badge {
+      margin-left: auto;
+      min-width: 20px;
+      height: 20px;
+      padding: 0 0.35rem;
+      border-radius: 9999px;
+      background: #dc2626;
+      color: #ffffff;
+      font-size: 0.66rem;
+      font-weight: 800;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
     }
 
     .sidebar-footer {
@@ -1006,6 +1107,8 @@ import { BreadcrumbsComponent } from '../../../shared/components/breadcrumbs/bre
 })
 export class AdminLayoutComponent implements OnInit {
   public authService = inject(AuthService);
+  public pendingPayments = inject(PendingPaymentService); // [EXAMEN-2]
+  public syncEngine = inject(SyncEngineService); // [EXAMEN-2]
   private inventoryApi = inject(InventoryApiService);
   private elementRef = inject(ElementRef);
   

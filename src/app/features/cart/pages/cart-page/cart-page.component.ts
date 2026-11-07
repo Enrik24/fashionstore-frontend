@@ -8,11 +8,12 @@ import { AlertService } from '../../../../core/services/alert.service';
 import { ModalComponent } from '../../../../shared/components/modal/modal.component';
 import { ItemCarrito } from '../../../../core/models/cart.model';
 import { Cupon } from '../../../../core/models/coupon.model';
+import { CartOfflinePanelComponent } from '../../components/cart-offline-panel/cart-offline-panel.component'; // [EXAMEN-2] CU15
 
 @Component({
   selector: 'app-cart-page',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, ModalComponent],
+  imports: [CommonModule, FormsModule, RouterLink, ModalComponent, CartOfflinePanelComponent],
   template: `
     <div class="cart-page">
       <div class="container py-8">
@@ -145,7 +146,15 @@ import { Cupon } from '../../../../core/models/coupon.model';
                   <i class="ri-coupon-3-line"></i> Cupón de Descuento
                 </h3>
 
-                @if (cartService.cartSignal()?.cupon) {
+                @if (cartService.esOffline()) {
+                  <div class="coupon-offline-bloqueado">
+                    <i class="ri-wifi-off-line"></i>
+                    <div>
+                      <strong>Cupón deshabilitado sin conexión</strong>
+                      <p>Los cupones se validan contra el servidor (RN-014). Podrás aplicarlo al recuperar la red.</p>
+                    </div>
+                  </div>
+                } @else if (cartService.cartSignal()?.cupon) {
                   <div class="applied-coupon-badge">
                     <i class="ri-check-line"></i> Cupón activo: <strong>{{ cartService.cartSignal()?.cupon?.codigo }}</strong>
                     <button
@@ -222,14 +231,19 @@ import { Cupon } from '../../../../core/models/coupon.model';
                   </div>
                 </div>
 
-                <a routerLink="/checkout" class="btn btn-accent btn-lg btn-checkout">
-                  <i class="ri-shield-check-line"></i> Proceder al Pago Seguro
-                </a>
+                @if (!cartService.esOffline()) {
+                  <a routerLink="/checkout" class="btn btn-accent btn-lg btn-checkout">
+                    <i class="ri-shield-check-line"></i> Proceder al Pago Seguro
+                  </a>
 
-                <div class="security-guarantee">
-                  <i class="ri-lock-2-line"></i>
-                  <span>Transacción 100% segura y encriptada SSL</span>
-                </div>
+                  <div class="security-guarantee">
+                    <i class="ri-lock-2-line"></i>
+                    <span>Transacción 100% segura y encriptada SSL</span>
+                  </div>
+                } @else {
+                  <!-- [EXAMEN-2] CU15: confirmación de compra offline en la misma pantalla -->
+                  <app-cart-offline-panel></app-cart-offline-panel>
+                }
               </div>
             </div>
           </div>
@@ -494,6 +508,23 @@ import { Cupon } from '../../../../core/models/coupon.model';
     .coupon-input-group {
       display: flex;
       gap: 0.5rem;
+    }
+
+    /* [EXAMEN-2] CU15: cupón bloqueado en modo offline */
+    .coupon-offline-bloqueado {
+      display: flex;
+      gap: 0.6rem;
+      align-items: flex-start;
+      padding: 0.75rem 0.85rem;
+      border-radius: 0.6rem;
+      background: #fffbeb;
+      border: 1px solid #fcd34d;
+      color: #92400e;
+      font-size: 0.8rem;
+    }
+    .coupon-offline-bloqueado p {
+      margin: 0.15rem 0 0;
+      font-size: 0.74rem;
     }
 
     .applied-coupon-badge {

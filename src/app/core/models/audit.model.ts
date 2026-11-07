@@ -14,6 +14,9 @@ export interface BitacoraEntry {
   valores_nuevos?: Record<string, any> | string | null;
   fecha_hora?: string;
   created_at?: string;
+  // [EXAMEN-2]
+  tenant_id?: number | null;
+  tenant_nombre?: string | null;
 }
 
 export interface BitacoraFilter {

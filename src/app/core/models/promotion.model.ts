@@ -21,6 +21,8 @@ export interface Promocion {
   categoria_ids: number[];
   sucursal_ids: number[];
   advertencia?: string | null;
+  // [EXAMEN-2]
+  tenant_id?: number | null;
 }
 
 export interface PromocionCreateDto {

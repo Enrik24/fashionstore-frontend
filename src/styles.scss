@@ -29,6 +29,21 @@
   --info: #3b82f6;
   --info-bg: rgba(59, 130, 246, 0.1);
 
+  /* [EXAMEN-2] Tokens del capítulo 11.3: estados offline y de plan */
+  --offline: #475569;
+  --offline-bg: rgba(71, 85, 105, 0.1);
+  --pending: #d97706;
+  --pending-bg: rgba(217, 119, 6, 0.12);
+  --synced: #10b981;
+  --synced-bg: rgba(16, 185, 129, 0.12);
+  --conflict: #c2410c;
+  --conflict-bg: rgba(194, 65, 12, 0.12);
+  --locked: #64748b;
+  --locked-bg: rgba(100, 116, 139, 0.12);
+  --critical: #dc2626;
+  --critical-bg: rgba(220, 38, 38, 0.12);
+  --pos-touch: 44px;
+
   /* Neutrals */
   --bg-main: #f8fafc;
   --bg-card: #ffffff;
@@ -559,4 +574,158 @@ button, input, select, textarea {
     color: var(--primary) !important;
   }
 }
+
+/* ==========================================================================
+   [EXAMEN-2] Estados offline, sincronización, planes y utilidades de página
+   ========================================================================== */
+.badge-offline {
+  background-color: var(--offline-bg);
+  color: var(--offline);
+  border: 1px solid rgba(71, 85, 105, 0.25);
+}
+
+.badge-pending {
+  background-color: var(--pending-bg);
+  color: var(--pending);
+  border: 1px solid rgba(217, 119, 6, 0.25);
+}
+
+.badge-synced {
+  background-color: var(--synced-bg);
+  color: var(--synced);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+}
+
+.badge-conflict {
+  background-color: var(--conflict-bg);
+  color: var(--conflict);
+  border: 1px solid rgba(194, 65, 12, 0.25);
+}
+
+.badge-locked {
+  background-color: var(--locked-bg);
+  color: var(--locked);
+  border: 1px solid rgba(100, 116, 139, 0.25);
+}
+
+.badge-critical {
+  background-color: var(--critical-bg);
+  color: var(--critical);
+  border: 1px solid rgba(220, 38, 38, 0.25);
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.page-container {
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  max-width: 1400px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.page-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.page-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: 1.25rem;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 2.5rem 1rem;
+  color: var(--text-muted);
+  gap: 0.5rem;
+
+  i {
+    font-size: 2.5rem;
+    color: var(--text-light);
+  }
+}
+
+.spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid var(--border-color);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: fs-spin 0.8s linear infinite;
+}
+
+@keyframes fs-spin {
+  to { transform: rotate(360deg); }
+}
+
+.progress-track {
+  width: 100%;
+  height: 8px;
+  background: #e2e8f0;
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: var(--radius-full);
+  background: var(--synced);
+  transition: width var(--transition-normal);
+}
+
+/* [EXAMEN-2] Banner global de conectividad */
+.connectivity-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding: 0.55rem 1rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  background: var(--offline-bg);
+  color: var(--offline);
+  border-bottom: 1px solid rgba(71, 85, 105, 0.2);
+
+  &.is-offline {
+    background: #1e293b;
+    color: #e2e8f0;
+  }
+
+  &.is-pending {
+    background: var(--pending-bg);
+    color: var(--pending);
+  }
+
+  .banner-action {
+    background: transparent;
+    border: 1px solid currentColor;
+    color: inherit;
+    border-radius: var(--radius-full);
+    padding: 0.2rem 0.7rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
+}
+
 

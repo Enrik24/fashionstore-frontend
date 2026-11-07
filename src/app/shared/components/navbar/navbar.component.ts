@@ -3,11 +3,15 @@ import { CommonModule } from '@angular/common';
 import { Router, RouterLink, RouterLinkActive } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
 import { CartIconComponent } from '../../../features/cart/components/cart-icon/cart-icon.component';
+import { TenantBadgeComponent } from '../tenant-badge/tenant-badge.component';
+import { SyncStatusBadgeComponent } from '../sync-status-badge/sync-status-badge.component'; // [EXAMEN-2]
+import { SyncEngineService } from '../../../core/offline/sync-engine.service'; // [EXAMEN-2]
+import { PendingPaymentService } from '../../../core/offline/pending-payment.service'; // [EXAMEN-2]
 
 @Component({
   selector: 'app-navbar',
   standalone: true,
-  imports: [CommonModule, RouterLink, RouterLinkActive, CartIconComponent],
+  imports: [CommonModule, RouterLink, RouterLinkActive, CartIconComponent, TenantBadgeComponent, SyncStatusBadgeComponent],
   template: `
     <header class="navbar-wrapper glass">
       <div class="container navbar-container">
@@ -40,6 +44,24 @@ import { CartIconComponent } from '../../../features/cart/components/cart-icon/c
 
         <!-- Right Action Items -->
         <div class="nav-actions">
+          @if (authService.isAuthenticated()) {
+            <!-- [EXAMEN-2 FIX] CU04: /admin/mi-suscripcion es solo Admin (adminGuard).
+                 Antes el badge se mostraba a cualquier autenticado (incl. Cliente)
+                 y al clickear disparaba "Acceso Denegado". Solo Admin lo ve. -->
+            @if (authService.isAdmin()) {
+              <app-tenant-badge [compacto]="true"></app-tenant-badge>
+            }
+
+            <!-- [EXAMEN-2] CU08 / RF-030: estado de sincronización con badges -->
+            <a routerLink="/offline/sincronizacion" class="sync-nav-link" title="Centro de sincronización">
+              <app-sync-status-badge
+                [estado]="syncEngine.estado()"
+                [pendientes]="syncEngine.pendientes()"
+                [conflictos]="syncEngine.conflictosPendientes()"
+              ></app-sync-status-badge>
+            </a>
+          }
+
           <!-- Shopping Cart Icon -->
           <app-cart-icon></app-cart-icon>
 
@@ -178,6 +200,46 @@ import { CartIconComponent } from '../../../features/cart/components/cart-icon/c
                       <i class="ri-arrow-right-s-line item-arrow"></i>
                     </a>
 
+                    <!-- [EXAMEN-2] CU17: PIN y dispositivos autorizados -->
+                    <a routerLink="/profile/offline" class="dropdown-item" (click)="closeUserMenu()">
+                      <div class="item-icon-box">
+                        <i class="ri-shield-keyhole-line"></i>
+                      </div>
+                      <div class="item-text">
+                        <span class="item-title">Seguridad offline</span>
+                        <span class="item-subtitle">PIN y dispositivos autorizados</span>
+                      </div>
+                      <i class="ri-arrow-right-s-line item-arrow"></i>
+                    </a>
+
+                    <!-- [EXAMEN-2 FIX] CU05: Descarga para offline. Antes esta ruta solo estaba
+                         en el sidebar Admin; el Cliente (actor CU05) no tenía forma de llegar sin tipear la URL. -->
+                    <a routerLink="/offline/descarga" class="dropdown-item" (click)="closeUserMenu()">
+                      <div class="item-icon-box">
+                        <i class="ri-download-cloud-2-line"></i>
+                      </div>
+                      <div class="item-text">
+                        <span class="item-title">Datos offline</span>
+                        <span class="item-subtitle">Descargar catálogo para operar sin conexión (CU05)</span>
+                      </div>
+                      <i class="ri-arrow-right-s-line item-arrow"></i>
+                    </a>
+
+                    <!-- [EXAMEN-2] CU16: pagos diferidos del cliente -->
+                    <a routerLink="/profile/pagos-pendientes" class="dropdown-item" (click)="closeUserMenu()">
+                      <div class="item-icon-box">
+                        <i class="ri-bank-card-line"></i>
+                      </div>
+                      <div class="item-text">
+                        <span class="item-title">Pagos pendientes</span>
+                        <span class="item-subtitle">Órdenes offline por cobrar</span>
+                      </div>
+                      @if (pendingPayments.pagosPendientes() > 0) {
+                        <span class="item-badge">{{ pendingPayments.pagosPendientes() }}</span>
+                      }
+                      <i class="ri-arrow-right-s-line item-arrow"></i>
+                    </a>
+
                     <a routerLink="/catalog" class="dropdown-item" (click)="closeUserMenu()">
                       <div class="item-icon-box">
                         <i class="ri-store-2-line"></i>
@@ -236,6 +298,14 @@ import { CartIconComponent } from '../../../features/cart/components/cart-icon/c
             </a>
             <a routerLink="/profile/reservations" (click)="closeMobileNav()" class="mobile-nav-link">
               <i class="ri-calendar-check-line"></i> Mis Reservas
+            </a>
+            <!-- [EXAMEN-2] CU17: PIN y dispositivos autorizados -->
+            <a routerLink="/profile/offline" (click)="closeMobileNav()" class="mobile-nav-link">
+              <i class="ri-shield-keyhole-line"></i> Seguridad Offline
+            </a>
+            <!-- [EXAMEN-2 FIX] CU05: link visible para Cliente (antes huérfano, solo en Admin) -->
+            <a routerLink="/offline/descarga" (click)="closeMobileNav()" class="mobile-nav-link">
+              <i class="ri-download-cloud-2-line"></i> Datos Offline
             </a>
           }
 
@@ -380,6 +450,15 @@ import { CartIconComponent } from '../../../features/cart/components/cart-icon/c
       display: flex;
       align-items: center;
       gap: 1rem;
+    }
+
+    /* [EXAMEN-2] RF-030: indicador compacto de sincronización en la navbar */
+    .sync-nav-link {
+      text-decoration: none;
+      display: inline-flex;
+    }
+    @media (max-width: 900px) {
+      .sync-nav-link { display: none; }
     }
 
     .auth-buttons {
@@ -618,6 +697,21 @@ import { CartIconComponent } from '../../../features/cart/components/cart-icon/c
       font-size: 1rem;
     }
 
+    /* [EXAMEN-2] RF-030: badge de pagos pendientes en el menú del usuario */
+    .item-badge {
+      min-width: 20px;
+      height: 20px;
+      padding: 0 0.35rem;
+      border-radius: 9999px;
+      background: #dc2626;
+      color: #ffffff;
+      font-size: 0.66rem;
+      font-weight: 800;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
     /* Mobile Navigation */
     .mobile-toggle-btn {
       display: none;
@@ -686,6 +780,8 @@ import { CartIconComponent } from '../../../features/cart/components/cart-icon/c
 })
 export class NavbarComponent {
   public authService = inject(AuthService);
+  public syncEngine = inject(SyncEngineService); // [EXAMEN-2]
+  public pendingPayments = inject(PendingPaymentService); // [EXAMEN-2]
   private router = inject(Router);
   private elementRef = inject(ElementRef);
 

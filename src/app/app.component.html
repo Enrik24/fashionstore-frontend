@@ -5,6 +5,11 @@
   <!-- Global Loading Indicator -->
   <app-loading></app-loading>
 
+  <!-- [EXAMEN-2] Estado de conexión y sesión offline (oculto en plataforma) -->
+  @if (!isPlatformRoute) {
+    <app-connectivity-banner></app-connectivity-banner>
+  }
+
   <!-- Global Navbar (Only on public non-admin routes) -->
   @if (!isAdminRoute) {
     <app-navbar></app-navbar>

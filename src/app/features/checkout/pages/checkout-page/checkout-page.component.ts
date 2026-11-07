@@ -10,6 +10,7 @@ import { AuthService } from '../../../../core/services/auth.service';
 import { BranchApiService } from '../../../../core/services/branch-api.service';
 import { Sucursal } from '../../../../core/models/branch.model';
 import { Orden } from '../../../../core/models/cart.model';
+import { PendingPaymentService } from '../../../../core/offline/pending-payment.service'; // [EXAMEN-2]
 
 @Component({
   selector: 'app-checkout-page',
@@ -31,6 +32,17 @@ import { Orden } from '../../../../core/models/cart.model';
             <a routerLink="/catalog" class="btn btn-primary btn-sm">Ir al Catálogo</a>
           </div>
         } @else {
+          <!-- [EXAMEN-2] CU16 / RF-030: pagos diferidos pendientes del cliente -->
+          @if (pendingPayments.pagosPendientes() > 0) {
+            <div class="pago-pendiente-banner">
+              <i class="ri-bank-card-line"></i>
+              <div>
+                <strong>Tienes {{ pendingPayments.pagosPendientes() }} pago(s) pendiente(s)</strong>
+                <p>Complétalos para confirmar las órdenes generadas en modo offline.</p>
+              </div>
+              <a routerLink="/profile/pagos-pendientes" class="btn btn-outline btn-sm">Ver pagos</a>
+            </div>
+          }
           <div class="checkout-grid">
             <!-- Left: Form Steps -->
             <div class="checkout-form-col">
@@ -255,6 +267,24 @@ import { Orden } from '../../../../core/models/cart.model';
     .checkout-header {
       margin-bottom: 2rem;
     }
+
+    /* [EXAMEN-2] CU16: aviso de pagos diferidos pendientes */
+    .pago-pendiente-banner {
+      display: flex;
+      gap: 0.7rem;
+      align-items: center;
+      padding: 0.8rem 1rem;
+      margin-bottom: 1rem;
+      border-radius: 0.7rem;
+      background: #fffbeb;
+      border: 1px solid #fcd34d;
+      color: #92400e;
+      font-size: 0.82rem;
+      flex-wrap: wrap;
+    }
+    .pago-pendiente-banner div { flex: 1 1 240px; }
+    .pago-pendiente-banner strong { display: block; }
+    .pago-pendiente-banner p { margin: 0.15rem 0 0; font-size: 0.75rem; }
 
     .checkout-title {
       font-size: 2rem;
@@ -539,6 +569,7 @@ import { Orden } from '../../../../core/models/cart.model';
 })
 export class CheckoutPageComponent implements OnInit {
   public cartService = inject(CartService);
+  public pendingPayments = inject(PendingPaymentService); // [EXAMEN-2]
   private orderService = inject(OrderService);
   private paymentService = inject(PaymentService);
   private branchService = inject(BranchApiService);

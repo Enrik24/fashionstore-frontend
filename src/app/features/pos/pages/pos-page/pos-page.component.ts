@@ -15,6 +15,7 @@ import { Inventario } from '../../../../core/models/inventory.model';
 import { MetodoPagoPresencial, VentaPresencial } from '../../../../core/models/cart.model';
 import { ClientProfile } from '../../../../core/models/user.model';
 import { PromocionPublica } from '../../../../core/models/promotion.model';
+import { SyncEngineService } from '../../../../core/offline/sync-engine.service'; // [EXAMEN-2]
 
 interface PosItem {
   variant: VarianteProducto;
@@ -64,6 +65,16 @@ interface PosItem {
         </div>
 
         <div class="pos-actions-top">
+          <!-- [EXAMEN-2] CU07: modo offline de la terminal -->
+          <a routerLink="/pos/offline" class="btn btn-outline btn-sm" title="Venta de contado sin conexión">
+            <i class="ri-wifi-off-line"></i> POS offline
+          </a>
+          <a routerLink="/offline/sincronizacion" class="btn btn-outline btn-sm" title="Cola de sincronización (CU08)">
+            <i class="ri-loop-left-line"></i> Sincronización
+            @if (syncEngine.pendientes() + syncEngine.conflictosPendientes() > 0) {
+              <span class="top-badge">{{ syncEngine.pendientes() + syncEngine.conflictosPendientes() }}</span>
+            }
+          </a>
           <a routerLink="/home" class="btn btn-outline btn-sm">
             <i class="ri-store-2-line"></i> Tienda
           </a>
@@ -459,6 +470,28 @@ interface PosItem {
       display: flex;
       align-items: center;
       gap: 0.75rem;
+    }
+
+    /* [EXAMEN-2] RF-030: badge de pendientes en la terminal POS */
+    .pos-actions-top {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+    .top-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 18px;
+      height: 18px;
+      padding: 0 0.3rem;
+      margin-left: 0.25rem;
+      border-radius: 9999px;
+      background: #dc2626;
+      color: #ffffff;
+      font-size: 0.64rem;
+      font-weight: 800;
     }
 
     .pos-logo {
@@ -1024,6 +1057,7 @@ interface PosItem {
   `]
 })
 export class PosPageComponent implements OnInit, OnDestroy {
+  public syncEngine = inject(SyncEngineService); // [EXAMEN-2]
   private posService = inject(PosService);
   private catalogService = inject(PublicCatalogService);
   private branchService = inject(BranchApiService);

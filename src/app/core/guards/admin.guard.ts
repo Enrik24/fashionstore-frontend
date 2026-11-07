@@ -11,6 +11,12 @@ export const adminGuard: CanActivateFn = (route, state) => {
 
   const user = storage.getUser<UserProfile>();
 
+  // [EXAMEN-2] El Super Administrador tiene su propio panel de plataforma.
+  if (storage.getEsSuperAdmin() || user?.es_super_admin) {
+    router.navigate(['/plataforma/empresas']);
+    return false;
+  }
+
   if (user && user.roles && user.roles.some(r => r.nombre.toLowerCase() === 'administrador')) {
     return true;
   }

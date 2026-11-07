@@ -30,6 +30,10 @@ export interface Sucursal {
   latitud?: number;
   longitud?: number;
   ciudad?: Ciudad;
+  // [EXAMEN-2] Aislamiento y baja lógica.
+  tenant_id?: number | null;
+  updated_at?: string;
+  deleted_at?: string | null;
 }
 
 export interface SucursalCreateDto {

@@ -60,6 +60,9 @@ describe('PosPageComponent (CU17 - Venta Presencial)', () => {
   };
 
   beforeEach(async () => {
+    // [EXAMEN-2] Aísla el borrador persistido del POS entre pruebas.
+    try { localStorage.removeItem('fs_pos_ticket_v1'); } catch { /* noop */ }
+
     branchServiceMock = {
       getBranches: jasmine.createSpy('getBranches').and.returnValue(of([sucursalCentral, sucursalNorte])),
       // La Sucursal Central tiene 7 unidades y la Sucursal Norte ninguna

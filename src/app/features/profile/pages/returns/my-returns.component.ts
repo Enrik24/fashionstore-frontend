@@ -73,8 +73,14 @@ import { SolicitudDevolucion, EstadoSolicitudDevolucion } from '../../../../core
                   <div class="return-meta-grid">
                     <div>
                       <span class="detail-label">Tipo de solicitud:</span>
-                      <span class="detail-val">{{ solicitud.tipo === 'CAMBIO' ? 'Cambio por otra talla/color' : 'Devolución con reembolso' }}</span>
+                      <span class="detail-val">{{ solicitud.tipo === 'REPOSICION' ? 'Reposición (cambio de prenda)' : (solicitud.tipo === 'CAMBIO' ? 'Cambio por otra talla/color' : 'Devolución con reembolso') }}</span>
                     </div>
+                    @if (solicitud.fecha_limite_cambio) {
+                      <div><span class="detail-label">Cambio disponible hasta:</span><span class="detail-val">{{ solicitud.fecha_limite_cambio | date:'dd/MM/yyyy' }}</span></div>
+                    }
+                    @if (solicitud.numero_reposicion || solicitud.nota_reposicion_url || solicitud.nota_devolucion_url) {
+                      <div><span class="detail-label">Nota:</span><span class="detail-val">{{ solicitud.numero_reposicion || 'Descargable' }}</span></div>
+                    }
                     <div>
                       <span class="detail-label">Motivo:</span>
                       <span class="detail-val">{{ getMotivoLabel(solicitud.motivo) }}</span>

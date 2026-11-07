@@ -149,4 +149,13 @@ export class ReportsService {
       parametros: { fecha_inicio: filtros.fechaInicio, fecha_fin: filtros.fechaFin, sucursal_id: filtros.sucursalId }
     });
   }
+
+  // ===== [EXAMEN-2] CU10/CU11: reportes generativos =====
+  solicitarPorTexto(prompt: string, filtros?: { sucursal_id?: number | null; fecha_inicio?: string; fecha_fin?: string }): Observable<any> { return this.http.post(`${this.API_URL}/reportes-ia/solicitar`, { prompt, origen: 'TEXTO', ...(filtros ?? {}) }); }
+  solicitarPorVoz(audio: Blob): Observable<any> { const f = new FormData(); f.append('audio', audio); return this.http.post(`${this.API_URL}/reportes-ia/solicitar`, f); }
+  interpretar(prompt: string): Observable<any> { return this.http.post(`${this.API_URL}/reportes-ia/interpretar`, { prompt }); }
+  ejecutar(solicitudId: number | string): Observable<any> { return this.http.post(`${this.API_URL}/reportes-ia/${solicitudId}/ejecutar`, {}); }
+  historial(filtros: { skip?: number; limit?: number } = {}): Observable<any[]> { const p = new HttpParams().set('skip', String(filtros.skip ?? 0)).set('limit', String(filtros.limit ?? 50)); return this.http.get<any[]>(`${this.API_URL}/reportes-ia/historial`, { params: p }); }
+  plantillasDisponibles(): Observable<any[]> { return this.http.get<any[]>(`${this.API_URL}/reportes-ia/plantillas`); }
+  exportarReporte(solicitudId: number | string, formato: string): Observable<Blob> { return this.http.post(`${this.API_URL}/reportes-ia/${solicitudId}/exportar`, { formato }, { responseType: 'blob' }); }
 }

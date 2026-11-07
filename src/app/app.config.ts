@@ -7,13 +7,20 @@ import { routes } from './app.routes';
 import { authInterceptor } from './core/interceptors/auth.interceptor';
 import { errorInterceptor } from './core/interceptors/error.interceptor';
 import { loadingInterceptor } from './core/interceptors/loading.interceptor';
+import { offlineTokenInterceptor } from './core/interceptors/offline-token.interceptor';
+import { tenantInterceptor } from './core/interceptors/tenant.interceptor';
+import { idempotencyInterceptor } from './core/interceptors/idempotency.interceptor';
 
 export const appConfig: ApplicationConfig = {
   providers: [
     provideRouter(routes, withComponentInputBinding(), withViewTransitions()),
     provideHttpClient(
       withInterceptors([
+        // [EXAMEN-2] Orden del capítulo 6.3 del plan de frontend.
+        offlineTokenInterceptor,
         authInterceptor,
+        tenantInterceptor,
+        idempotencyInterceptor,
         errorInterceptor,
         loadingInterceptor
       ])

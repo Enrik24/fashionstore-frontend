@@ -60,4 +60,16 @@ export class ReturnsApiService {
   processRefund(id: number): Observable<SolicitudDevolucion> {
     return this.http.post<SolicitudDevolucion>(`${this.API_URL}/${id}/procesar-reembolso`, {});
   }
+
+  // ===== [EXAMEN-2] CU13/CU18 =====
+  solicitarReposicion(dto: any): Observable<SolicitudDevolucion> { return this.http.post<SolicitudDevolucion>(`${this.API_URL}/reposicion`, { ...dto, tipo: 'REPOSICION' }); }
+  listarReposiciones(filtros: { sucursal_id?: number; estado?: string } = {}): Observable<SolicitudDevolucion[]> { let p = new HttpParams(); if (filtros.sucursal_id) p = p.set('sucursal_id', String(filtros.sucursal_id)); if (filtros.estado) p = p.set('estado', filtros.estado); return this.http.get<SolicitudDevolucion[]>(`${this.API_URL}/reposiciones`, { params: p }); }
+  buscarVentaElegible(numeroComprobante: string): Observable<any> { return this.http.get<any>(`${this.API_URL}/venta/${encodeURIComponent(numeroComprobante)}`); }
+  validarPlazo(ordenId: number): Observable<any> { return this.http.get<any>(`${this.API_URL}/validar-plazo/${ordenId}`); }
+  calcularDiferencia(items: any[]): Observable<any> { return this.http.post<any>(`${this.API_URL}/calcular-diferencia`, { items }); }
+  alternativasTalla(varianteId: number, direccion: string, sucursalId?: number): Observable<any[]> { let p = new HttpParams().set('direccion', direccion); if (sucursalId) p = p.set('sucursal_id', String(sucursalId)); return this.http.get<any[]>(`${this.API_URL}/alternativas-talla/${varianteId}`, { params: p }); }
+  notificarAlternativa(solicitudId: number): Observable<any> { return this.http.post<any>(`${this.API_URL}/${solicitudId}/notificar-alternativa`, {}); }
+  descargarNota(solicitudId: number): Observable<Blob> { return this.http.get(`${this.API_URL}/${solicitudId}/nota`, { responseType: 'blob' }); }
+  descargarNotaReposicion(solicitudId: number): Observable<Blob> { return this.http.get(`${this.API_URL}/${solicitudId}/nota-reposicion`, { responseType: 'blob' }); }
+  solicitudesPendientesOffline(): Observable<SolicitudDevolucion[]> { return this.http.get<SolicitudDevolucion[]>(`${this.API_URL}/pendientes-offline`); }
 }

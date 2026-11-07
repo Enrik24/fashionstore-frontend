@@ -70,4 +70,13 @@ export class InventoryApiService {
   getStockAlerts(): Observable<Inventario[]> {
     return this.http.get<Inventario[]>(`${this.API_URL}/alertas`);
   }
+
+  // ===== [EXAMEN-2] CU14/CU18: movimientos con referencia =====
+  movimientosConReferencia(filtros: { inventario_id?: number; tipo?: string; referencia_uuid?: string; skip?: number; limit?: number } = {}): Observable<MovimientoInventario[]> {
+    let p = new HttpParams().set('skip', String(filtros.skip ?? 0)).set('limit', String(filtros.limit ?? 100));
+    if (filtros.inventario_id) p = p.set('inventario_id', String(filtros.inventario_id));
+    if (filtros.tipo) p = p.set('tipo', filtros.tipo);
+    if (filtros.referencia_uuid) p = p.set('referencia_uuid', filtros.referencia_uuid);
+    return this.http.get<MovimientoInventario[]>(`${this.API_URL}/movimientos`, { params: p });
+  }
 }

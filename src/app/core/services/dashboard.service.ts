@@ -184,6 +184,17 @@ export class DashboardService {
     return (ventasMes / diasTranscurridos) * diasDelMes;
   }
 
+  // ===== [EXAMEN-2] CU12: analítica con caché =====
+  private cacheDashboard: { datos: any; expira: number } | null = null;
+  obtenerDashboard(filtros: { sucursal_id?: number | null; fecha_inicio?: string; fecha_fin?: string } = {}): Observable<any> {
+    const ahora = Date.now();
+    if (this.cacheDashboard && ahora < this.cacheDashboard.expira) return of(this.cacheDashboard.datos);
+    const f = { preset: '30d' as const, fechaInicio: filtros.fecha_inicio ?? new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10), fechaFin: filtros.fecha_fin ?? new Date().toISOString().slice(0, 10), sucursalId: filtros.sucursal_id ?? undefined, comparar: false };
+    return this.getDashboardBundle(f).pipe(map((vm) => { const datos = { ...vm, prendas_repuestas: 0, monto_compensaciones: 0, generado_en: new Date().toISOString(), desde_cache: false }; this.cacheDashboard = { datos, expira: ahora + 5 * 60 * 1000 }; return datos; }));
+  }
+  detalleKpi(kpi: string, filtros: { sucursal_id?: number | null } = {}): Observable<any> { return this.reports.getKpis().pipe(map((items) => items.find((k) => k.nombre === kpi) ?? null)); }
+  obtenerKpis(filtros: { sucursal_id?: number | null } = {}): Observable<any[]> { return this.reports.getKpis(); }
+
   score(raw: any): { valor: number; tono: KpiTone; etiqueta: string } | null {
     const parts: { v: number; w: number }[] = [];
     const cmpDelta: number | null = raw?.comparativo?.deltaPct?.total_recaudado ?? null;

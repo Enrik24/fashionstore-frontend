@@ -3,11 +3,12 @@ import { CommonModule } from '@angular/common';
 import { RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
 import { BreadcrumbsComponent } from '../../../shared/components/breadcrumbs/breadcrumbs.component';
+import { TenantBadgeComponent } from '../../../shared/components/tenant-badge/tenant-badge.component';
 
 @Component({
   selector: 'app-branch-layout',
   standalone: true,
-  imports: [CommonModule, RouterOutlet, RouterLink, RouterLinkActive, BreadcrumbsComponent],
+  imports: [CommonModule, RouterOutlet, RouterLink, RouterLinkActive, BreadcrumbsComponent, TenantBadgeComponent],
   template: `
     <div class="branch-wrapper">
       <!-- Sidebar -->
@@ -59,6 +60,10 @@ import { BreadcrumbsComponent } from '../../../shared/components/breadcrumbs/bre
               <span>Devoluciones</span>
             }
           </a>
+          <a routerLink="/branch/traspasos" routerLinkActive="active" class="sidebar-link" title="Traspasos por recibir (CU14)">
+            <i class="ri-arrow-left-right-line"></i>
+            @if (!isSidebarCollapsed()) { <span>Traspasos por recibir</span> }
+          </a>
         </nav>
 
         <div class="sidebar-footer">
@@ -79,6 +84,12 @@ import { BreadcrumbsComponent } from '../../../shared/components/breadcrumbs/bre
           </div>
 
           <div class="topbar-right">
+            <!-- [EXAMEN-2 FIX] CU04: /admin/mi-suscripcion es solo Admin (adminGuard).
+                 El Encargado no puede abrirla; antes veía el badge y recibía "Acceso Denegado". -->
+            @if (authService.isAdmin()) {
+              <app-tenant-badge [compacto]="true"></app-tenant-badge>
+            }
+
             <div class="branch-badge">
               <i class="ri-map-pin-2-fill text-accent"></i>
               <span>Encargado de Sucursal</span>
@@ -109,6 +120,14 @@ import { BreadcrumbsComponent } from '../../../shared/components/breadcrumbs/bre
                   <div class="dropdown-divider"></div>
                   <a routerLink="/home" class="dropdown-item" (click)="closeUserMenu()">
                     <i class="ri-store-2-line"></i> Ver Tienda
+                  </a>
+                  <!-- [EXAMEN-2] CU17: PIN y dispositivos autorizados -->
+                  <a routerLink="/profile/offline" class="dropdown-item" (click)="closeUserMenu()">
+                    <i class="ri-shield-keyhole-line"></i> Seguridad offline
+                  </a>
+                  <!-- [EXAMEN-2 FIX] CU05: acceso a descarga offline desde sucursal -->
+                  <a routerLink="/offline/descarga" class="dropdown-item" (click)="closeUserMenu()">
+                    <i class="ri-download-cloud-2-line"></i> Datos offline
                   </a>
                   <button class="dropdown-item text-danger" (click)="onLogout()">
                     <i class="ri-logout-box-r-line"></i> Cerrar Sesión

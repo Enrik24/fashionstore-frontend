@@ -3,11 +3,13 @@ import { RouterTestingModule } from '@angular/router/testing';
 import { ProductCardComponent } from './product-card.component';
 import { Producto } from '../../../../core/models/catalog.model';
 import { FavoritesService } from '../../../../core/services/favorites.service';
+import { ActivePromotionsService } from '../../../../core/services/active-promotions.service';
 
 describe('ProductCardComponent', () => {
   let component: ProductCardComponent;
   let fixture: ComponentFixture<ProductCardComponent>;
   let favoritesMock: jasmine.SpyObj<FavoritesService>;
+  let promotionsMock: jasmine.SpyObj<ActivePromotionsService>;
 
   const mockProduct: Producto = {
     id: 1,
@@ -25,9 +27,21 @@ describe('ProductCardComponent', () => {
     favoritesMock = jasmine.createSpyObj<FavoritesService>('FavoritesService', ['isFavorite', 'toggle']);
     favoritesMock.isFavorite.and.returnValue(false);
 
+    // [EXAMEN-2] El componente consulta promociones públicas al iniciar.
+    promotionsMock = jasmine.createSpyObj<ActivePromotionsService>('ActivePromotionsService', [
+      'load',
+      'getDiscountForProduct',
+      'has2x1'
+    ]);
+    promotionsMock.getDiscountForProduct.and.returnValue(null);
+    promotionsMock.has2x1.and.returnValue(false);
+
     await TestBed.configureTestingModule({
       imports: [ProductCardComponent, RouterTestingModule],
-      providers: [{ provide: FavoritesService, useValue: favoritesMock }]
+      providers: [
+        { provide: FavoritesService, useValue: favoritesMock },
+        { provide: ActivePromotionsService, useValue: promotionsMock }
+      ]
     }).compileComponents();
 
     fixture = TestBed.createComponent(ProductCardComponent);

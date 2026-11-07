@@ -13,6 +13,8 @@ import { forkJoin, of } from 'rxjs';
 import { PaginationComponent } from '../../../../shared/components/pagination/pagination.component';
 import { CurrencyFormatPipe } from '../../../../shared/pipes/currency-format.pipe';
 import { StatusBadgePipe } from '../../../../shared/pipes/status-badge.pipe';
+import { PlanFeatureService } from '../../../../core/services/plan-feature.service';
+import { TipoTela } from '../../../../core/models/tipo-tela.model';
 
 export interface VariantStockRow {
   sucursal_id: number;
@@ -225,6 +227,25 @@ export interface VariantStockRow {
           <div class="form-group">
             <label class="form-label" for="p-desc">Descripción Detallada <span class="optional-hint">(opcional)</span></label>
             <textarea id="p-desc" rows="2" formControlName="descripcion" class="form-control" placeholder="Composición 100% algodón peinado, corte ajustado..."></textarea>
+          </div>
+
+          <!-- [EXAMEN-2] Punto 3: tipo de tela y composición sugerida -->
+          <div class="grid grid-cols-2 form-row">
+            <div class="form-group">
+              <label class="form-label" for="p-tipo-tela">Tipo de tela</label>
+              <select id="p-tipo-tela" formControlName="tipo_tela_id" class="form-control">
+                <option [ngValue]="null">Sin tipo de tela</option>
+                @for (tipo of tiposTela(); track tipo.id) {
+                  <option [ngValue]="tipo.id">{{ tipo.nombre }}</option>
+                }
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="p-composicion">Composición sugerida</label>
+              <input id="p-composicion" type="text" formControlName="composicion" class="form-control"
+                     maxlength="250" placeholder="Ej. 95% algodón, 5% elastano">
+            </div>
           </div>
 
           <div class="grid grid-cols-4 form-row">
@@ -996,6 +1017,7 @@ export class ProductsComponent implements OnInit {
   private branchApi = inject(BranchApiService);
   private toast = inject(ToastService);
   private fb = inject(FormBuilder);
+  private planFeature = inject(PlanFeatureService);
 
   public products = signal<Producto[]>([]);
   public categories = signal<Categoria[]>([]);
@@ -1005,6 +1027,8 @@ export class ProductsComponent implements OnInit {
   public sizes = signal<Talla[]>([]);
   public colors = signal<Color[]>([]);
   public collections = signal<Coleccion[]>([]);
+  // [EXAMEN-2] Tipos de tela del tenant (Punto 3, CU04).
+  public tiposTela = signal<TipoTela[]>([]);
 
   /** Colecciones seleccionadas en el formulario (N:M con el producto). */
   public selectedCollectionIds: number[] = [];
@@ -1044,6 +1068,9 @@ export class ProductsComponent implements OnInit {
     categoria_id: [null, [Validators.required]],
     temporada_id: [null],
     proveedor_id: [null],
+    // [EXAMEN-2] Punto 3: tipo de tela y composición sugerida.
+    tipo_tela_id: [null],
+    composicion: [''],
     estado: ['ACTIVO']
   });
 
@@ -1105,6 +1132,11 @@ export class ProductsComponent implements OnInit {
     this.catalogApi.getSizes().subscribe(sz => this.sizes.set(sz));
     this.catalogApi.getColors().subscribe(cl => this.colors.set(cl));
     this.catalogApi.getCollections().subscribe(cs => this.collections.set(cs || []));
+    // [EXAMEN-2] Punto 3: catálogo de tipos de tela del tenant.
+    this.catalogApi.listarTiposTela().subscribe({
+      next: (tipos) => this.tiposTela.set(tipos),
+      error: () => this.tiposTela.set([])
+    });
 
     this.catalogApi.getProducts(0, 500).subscribe({
       next: (products) => {
@@ -1310,6 +1342,13 @@ export class ProductsComponent implements OnInit {
   }
 
   openCreateProductModal(): void {
+    // [EXAMEN-2] CU04 / RN-002: bloqueo al alcanzar el límite de productos del plan.
+    const resultado = this.planFeature.puedeCrearProducto(this.products().length);
+    if (!resultado.permitido) {
+      this.toast.warning(resultado.mensaje ?? 'Alcanzaste el límite de productos de tu plan.');
+      return;
+    }
+
     this.isEditingProduct.set(false);
     this.selectedProductId.set(null);
     this.uploadedImages.set([]);
@@ -1325,6 +1364,8 @@ export class ProductsComponent implements OnInit {
       categoria_id: this.categories().length > 0 ? this.categories()[0].id : null,
       temporada_id: null,
       proveedor_id: null,
+      tipo_tela_id: null,
+      composicion: '',
       estado: 'ACTIVO'
     });
 
@@ -1364,6 +1405,8 @@ export class ProductsComponent implements OnInit {
       categoria_id: product.categoria_id,
       temporada_id: product.temporada_id || null,
       proveedor_id: product.proveedor_id || null,
+      tipo_tela_id: product.tipo_tela_id ?? null,
+      composicion: product.composicion ?? '',
       estado: product.estado
     });
     this.isProductModalOpen.set(true);
@@ -1407,6 +1450,8 @@ export class ProductsComponent implements OnInit {
         categoria_id: +formVal.categoria_id,
         temporada_id: formVal.temporada_id ? +formVal.temporada_id : undefined,
         proveedor_id: formVal.proveedor_id ? +formVal.proveedor_id : undefined,
+        tipo_tela_id: formVal.tipo_tela_id ? +formVal.tipo_tela_id : null,
+        composicion: formVal.composicion || null,
         estado: formVal.estado,
         imagenes: imageUrls
       };
@@ -1442,6 +1487,8 @@ export class ProductsComponent implements OnInit {
         categoria_id: +formVal.categoria_id,
         temporada_id: formVal.temporada_id ? +formVal.temporada_id : undefined,
         proveedor_id: formVal.proveedor_id ? +formVal.proveedor_id : undefined,
+        tipo_tela_id: formVal.tipo_tela_id ? +formVal.tipo_tela_id : null,
+        composicion: formVal.composicion || null,
         estado: formVal.estado,
         imagenes: imageUrls,
         stock_por_sucursal: stockItems.length > 0 ? stockItems : undefined

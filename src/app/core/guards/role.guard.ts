@@ -11,8 +11,19 @@ export const roleGuard = (allowedRoles: string[]): CanActivateFn => {
     const toast = inject(ToastService);
 
     const user = storage.getUser<UserProfile>();
+    const permitidos = allowedRoles.map(ar => ar.toLowerCase());
+    const esSuperAdmin = storage.getEsSuperAdmin() || user?.es_super_admin === true;
 
-    if (user && user.roles && user.roles.some(r => allowedRoles.map(ar => ar.toLowerCase()).includes(r.nombre.toLowerCase()))) {
+    // [EXAMEN-2] El Super Administrador no se confunde con el Administrador
+    // de tenant: solo pasa si el rol pedido es explícitamente el suyo.
+    if (esSuperAdmin) {
+      if (permitidos.includes('super administrador')) return true;
+      toast.error('El Super Administrador no opera módulos de una empresa.');
+      router.navigate(['/plataforma/empresas']);
+      return false;
+    }
+
+    if (user && user.roles && user.roles.some(r => permitidos.includes(r.nombre.toLowerCase()))) {
       return true;
     }
 

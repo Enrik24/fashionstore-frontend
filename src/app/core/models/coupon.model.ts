@@ -17,6 +17,8 @@ export interface Cupon {
   fecha_creacion?: string;
   producto_ids?: number[];
   categoria_ids?: number[];
+  // [EXAMEN-2]
+  tenant_id?: number | null;
 }
 
 export interface CuponCreateDto {

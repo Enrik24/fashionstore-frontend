@@ -2,6 +2,7 @@ import { Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
+import { PendingPaymentService } from '../../../core/offline/pending-payment.service'; // [EXAMEN-2]
 
 @Component({
   selector: 'app-profile-layout',
@@ -42,6 +43,24 @@ import { AuthService } from '../../../core/services/auth.service';
           <a routerLink="/profile/returns" routerLinkActive="active" class="profile-nav-link">
             <i class="ri-arrow-go-back-line"></i> Mis Devoluciones
           </a>
+          <!-- [EXAMEN-2] CU16: pagos diferidos con badge de pendientes (RF-030) -->
+          <a routerLink="/profile/pagos-pendientes" routerLinkActive="active" class="profile-nav-link">
+            <i class="ri-bank-card-line"></i> Pagos Pendientes
+            @if (pendingPayments.pagosPendientes() > 0) {
+              <span class="nav-badge">{{ pendingPayments.pagosPendientes() }}</span>
+            }
+          </a>
+          <!-- [EXAMEN-2] CU17: PIN y dispositivos autorizados -->
+          <a routerLink="/profile/offline" routerLinkActive="active" class="profile-nav-link">
+            <i class="ri-shield-keyhole-line"></i> Seguridad Offline
+          </a>
+          <!-- [EXAMEN-2 FIX] CU05: el Cliente es actor de la descarga offline, pero
+               la ruta /offline/descarga solo estaba en el sidebar Admin. -->
+          <a routerLink="/offline/descarga" routerLinkActive="active" class="profile-nav-link">
+            <i class="ri-download-cloud-2-line"></i> Datos Offline
+          </a>
+          <a routerLink="/profile/notificaciones" routerLinkActive="active" class="profile-nav-link"><i class="ri-notification-3-line"></i> Notificaciones</a>
+          <a routerLink="/profile/mis-reposiciones" routerLinkActive="active" class="profile-nav-link"><i class="ri-exchange-line"></i> Mis reposiciones</a>
         </div>
       </div>
 
@@ -135,6 +154,20 @@ import { AuthService } from '../../../core/services/auth.service';
       color: var(--accent, #ec4899);
       border-bottom-color: var(--accent, #ec4899);
     }
+    /* [EXAMEN-2] RF-030: badge de pagos pendientes */
+    .nav-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 20px;
+      height: 20px;
+      padding: 0 0.35rem;
+      border-radius: 9999px;
+      background: #dc2626;
+      color: #ffffff;
+      font-size: 0.68rem;
+      font-weight: 800;
+    }
     .profile-main-content {
       max-width: 1200px;
       margin: 0 auto;
@@ -146,4 +179,5 @@ import { AuthService } from '../../../core/services/auth.service';
 })
 export class ProfileLayoutComponent {
   public authService = inject(AuthService);
+  public pendingPayments = inject(PendingPaymentService); // [EXAMEN-2]
 }

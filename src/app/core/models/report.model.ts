@@ -28,6 +28,12 @@ export interface ReporteVentas {
   resumen: ReporteVentasResumen;
   top_productos?: ProductoVendidoItem[];
   serie_diaria?: SerieDiariaPunto[];
+  // [EXAMEN-2] Trazabilidad de reportes y consultas generadas.
+  tenant_id?: number | null;
+  sucursal_id?: number | null;
+  tiempo_ms?: number;
+  query_sql_generada?: string;
+  error_detalle?: string;
 }
 
 export interface ReporteVentasComparativo {
@@ -131,4 +137,8 @@ export interface KPIDashboard {
   clientes_activos: number;
   ticket_promedio: number;
   kpis_detallados?: KPIItem[];
+  // [EXAMEN-2]
+  tenant_id?: number | null;
+  sucursal_id?: number | null;
+  generado_en?: string;
 }

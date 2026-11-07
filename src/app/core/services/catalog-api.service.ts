@@ -2,12 +2,14 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
-import { 
-  Categoria, CategoriaCreateDto, 
+import {
+  Categoria, CategoriaCreateDto,
   Talla, Color, Temporada, Coleccion, ColeccionCreateDto,
-  Producto, ProductoCreateDto, ProductoUpdateDto, 
-  VarianteProducto 
+  Producto, ProductoCreateDto, ProductoUpdateDto,
+  VarianteProducto
 } from '../models/catalog.model';
+// [EXAMEN-2] Punto 3: tipos de tela del tenant.
+import { TipoTela, TipoTelaCreate, TipoTelaUpdate } from '../models/tipo-tela.model';
 
 // DTOs para datos maestros
 export interface TallaCreateDto { valor: string; tipo?: string; descripcion?: string; }
@@ -151,7 +153,9 @@ export class CatalogApiService {
     estado?: string, 
     temporadaId?: number, 
     proveedorId?: number, 
-    buscar?: string
+    buscar?: string,
+    // [EXAMEN-2] Filtro por tipo de tela (Punto 3).
+    tipoTelaId?: number
   ): Observable<Producto[]> {
     let params = new HttpParams()
       .set('skip', skip.toString())
@@ -162,6 +166,7 @@ export class CatalogApiService {
     if (temporadaId) params = params.set('temporada_id', temporadaId.toString());
     if (proveedorId) params = params.set('proveedor_id', proveedorId.toString());
     if (buscar) params = params.set('buscar', buscar);
+    if (tipoTelaId) params = params.set('tipo_tela_id', tipoTelaId.toString());
 
     return this.http.get<Producto[]>(`${this.API_URL}/productos/`, { params });
   }
@@ -202,6 +207,31 @@ export class CatalogApiService {
   deleteImage(publicId: string): Observable<{ success: boolean; message: string; public_id: string }> {
     const params = new HttpParams().set('public_id', publicId);
     return this.http.delete<{ success: boolean; message: string; public_id: string }>(`${this.API_URL}/upload/imagen`, { params });
+  }
+
+  // ===== [EXAMEN-2] =====
+
+  /** Catálogo de tipos de tela del tenant (Punto 3, CU04). */
+  listarTiposTela(incluirInactivos: boolean = false): Observable<TipoTela[]> {
+    const params = new HttpParams().set('incluir_inactivos', String(incluirInactivos));
+    return this.http.get<TipoTela[]>(`${this.API_URL}/tipos-tela/`, { params });
+  }
+
+  crearTipoTela(datos: TipoTelaCreate): Observable<TipoTela> {
+    return this.http.post<TipoTela>(`${this.API_URL}/tipos-tela/`, datos);
+  }
+
+  actualizarTipoTela(id: number, datos: TipoTelaUpdate): Observable<TipoTela> {
+    return this.http.put<TipoTela>(`${this.API_URL}/tipos-tela/${id}`, datos);
+  }
+
+  eliminarTipoTela(id: number): Observable<{ message: string }> {
+    return this.http.delete<{ message: string }>(`${this.API_URL}/tipos-tela/${id}`);
+  }
+
+  /** Filtro de productos por tipo de tela (Punto 3). */
+  productosPorTipoTela(tipoTelaId: number, skip: number = 0, limit: number = 500): Observable<Producto[]> {
+    return this.getProducts(skip, limit, undefined, undefined, undefined, undefined, undefined, tipoTelaId);
   }
 }
 

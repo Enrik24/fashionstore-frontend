@@ -12,6 +12,10 @@ export interface User {
   fecha_registro: string;
   ultimo_acceso?: string;
   roles?: Rol[];
+  // [EXAMEN-2]
+  tenant_id?: number | null;
+  offline_pin_configurado?: boolean;
+  debe_cambiar_contrasena?: boolean;
 }
 
 export interface UserCreateDto {

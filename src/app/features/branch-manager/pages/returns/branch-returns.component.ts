@@ -84,8 +84,14 @@ import {
                 </div>
                 <div class="meta-row">
                   <span class="meta-label">Tipo:</span>
-                  <span class="meta-val">{{ solicitud.tipo === 'CAMBIO' ? 'Cambio' : 'Devolución' }}</span>
+                  <span class="meta-val">{{ solicitud.tipo === 'REPOSICION' ? 'Reposición' : (solicitud.tipo === 'CAMBIO' ? 'Cambio' : 'Devolución') }}</span>
                 </div>
+                @if (solicitud.diferencia_precio != null) {
+                  <div class="meta-row">
+                    <span class="meta-label">Diferencia:</span>
+                    <span class="meta-val">{{ solicitud.tipo_diferencia }} · Bs. {{ solicitud.diferencia_precio }} (saldo a favor Bs. {{ solicitud.saldo_favor }})</span>
+                  </div>
+                }
                 <div class="meta-row">
                   <span class="meta-label">Motivo:</span>
                   <span class="meta-val">{{ getMotivoLabel(solicitud.motivo) }}</span>
@@ -121,6 +127,12 @@ import {
                   </div>
                 }
               </div>
+
+              @if (solicitud.nota_devolucion_url || solicitud.nota_reposicion_url) {
+                <div class="res-notes">
+                  <span><b>Notas:</b> devolución {{ solicitud.nota_devolucion_url || '—' }} · reposición {{ solicitud.nota_reposicion_url || '—' }}{{ solicitud.numero_reposicion ? ' · ' + solicitud.numero_reposicion : '' }}</span>
+                </div>
+              }
 
               @if (solicitud.observaciones_staff) {
                 <div class="res-notes">
