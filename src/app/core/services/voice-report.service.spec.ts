@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { Injector, NgZone } from '@angular/core';
 import { VoiceReportService, VoiceDictadoHandlers } from './voice-report.service';
 
 /** Doble de la Web Speech API para pruebas. */
@@ -71,14 +72,41 @@ describe('VoiceReportService', () => {
   });
 
   it('informa error "unsupported" cuando el navegador no soporta dictado', () => {
-    delete (window as any).SpeechRecognition;
-    delete (window as any).webkitSpeechRecognition;
-    const sinSoporte = new VoiceReportService();
-    expect(sinSoporte.isSupported()).toBeFalse();
+    const win: any = window;
+    // Chrome 156+ expone SpeechRecognition como propiedad heredada del
+    // prototipo de window: un `delete window.X` directo ya no la elimina.
+    // La sombreamos con `undefined` a nivel propio (los checks del servicio
+    // son truthy, así que undefined equivale a falta de soporte).
+    const savedOwn = Object.getOwnPropertyDescriptor(win, 'SpeechRecognition');
+    const savedOwnWebkit = Object.getOwnPropertyDescriptor(win, 'webkitSpeechRecognition');
+    Object.defineProperty(win, 'SpeechRecognition', { value: undefined, configurable: true, writable: true });
+    Object.defineProperty(win, 'webkitSpeechRecognition', { value: undefined, configurable: true, writable: true });
 
-    const onError = jasmine.createSpy('onError');
-    sinSoporte.start('es-ES', handlers({ onError }));
-    expect(onError).toHaveBeenCalledWith('unsupported', jasmine.any(String));
+    try {
+      // [EXAMEN-2] El servicio inyecta NgZone (contexto de inyección) y es
+      // providedIn: root (TestBed ya lo cacheó en el beforeEach): se crea una
+      // instancia FRESCA con un injector propio para evaluar el constructor
+      // ya con la Web Speech API ausente.
+      const injectorLocal = Injector.create({
+        providers: [
+          VoiceReportService,
+          { provide: NgZone, useValue: new NgZone({ enableLongStackTrace: false }) }
+        ]
+      });
+      const sinSoporte = injectorLocal.get(VoiceReportService);
+      expect(sinSoporte.isSupported()).toBeFalse();
+
+      const onError = jasmine.createSpy('onError');
+      sinSoporte.start('es-ES', handlers({ onError }));
+      expect(onError).toHaveBeenCalledWith('unsupported', jasmine.any(String));
+    } finally {
+      if (savedOwn) {
+        Object.defineProperty(win, 'SpeechRecognition', savedOwn);
+      }
+      if (savedOwnWebkit) {
+        Object.defineProperty(win, 'webkitSpeechRecognition', savedOwnWebkit);
+      }
+    }
   });
 
   it('entrega el texto final y deja de grabar', () => {

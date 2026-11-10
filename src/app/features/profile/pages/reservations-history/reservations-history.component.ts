@@ -26,19 +26,38 @@ import { ReservationHistoryItem } from '../../../../core/models/profile.model';
         </div>
       </div>
 
-      <!-- Banner de suscripción a Notificaciones Push si no están activas -->
-      @if (notificationService.isPushSupported() && notificationService.permissionStatus() !== 'granted') {
+      <!-- Banner de suscripción a Notificaciones Push: se muestra si no hay
+           permiso, hay permiso pero este navegador aún no registró su token
+           (ex2: Chrome con permiso previo pero dispositivo no registrado),
+           o si Chrome bloqueó el permiso (guía para desbloquear). -->
+      @if (notificationService.isPushSupported() && (notificationService.permissionStatus() !== 'granted' || !notificationService.currentToken()) && notificationService.permissionStatus() !== 'denied') {
         <div class="notification-prompt card">
           <div class="prompt-icon">
             <i class="ri-notification-3-line"></i>
           </div>
           <div class="prompt-content">
-            <h4>¿Deseas recibir avisos cuando tus prendas estén listas?</h4>
-            <p>Te enviaremos una notificación push tan pronto la sucursal prepare tus prendas para prueba.</p>
+            @if (notificationService.permissionStatus() === 'granted') {
+              <h4>Notificaciones permitidas — registra este dispositivo</h4>
+              <p>Tu navegador tiene permiso pero aún no está registrado para recibir push. Haz clic para vincularlo.</p>
+            } @else {
+              <h4>¿Deseas recibir avisos cuando tus prendas estén listas?</h4>
+              <p>Te enviaremos una notificación push tan pronto la sucursal prepare tus prendas para prueba.</p>
+            }
           </div>
           <button class="btn btn-primary btn-sm" (click)="activarNotificaciones()">
-            <i class="ri-notification-badge-line"></i> Activar Notificaciones
+            <i class="ri-notification-badge-line"></i>
+            {{ notificationService.permissionStatus() === 'granted' ? 'Registrar este dispositivo' : 'Activar Notificaciones' }}
           </button>
+        </div>
+      } @else if (notificationService.permissionStatus() === 'denied') {
+        <div class="notification-prompt card">
+          <div class="prompt-icon">
+            <i class="ri-notification-off-line"></i>
+          </div>
+          <div class="prompt-content">
+            <h4>Notificaciones bloqueadas en el navegador</h4>
+            <p>Haz clic en el candado de la barra de direcciones → Notificaciones → Permitir, y recarga la página.</p>
+          </div>
         </div>
       }
 
