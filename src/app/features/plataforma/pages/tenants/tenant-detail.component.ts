@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { SaasApiService } from '../../../../core/services/saas-api.service';
 import { ToastService } from '../../../../core/services/toast.service';
+import { TenantContextService } from '../../../../core/services/tenant-context.service';
 import { DeviceService } from '../../../../core/offline/device.service';
 import {
   DispositivoSincronizacion
@@ -459,6 +460,7 @@ export class TenantDetailComponent implements OnInit {
   private device = inject(DeviceService);
   private route = inject(ActivatedRoute);
   private toast = inject(ToastService);
+  private tenantContext = inject(TenantContextService);
 
   public pestanas: Array<{ clave: Pestana; titulo: string; icono: string }> = [
     { clave: 'datos', titulo: 'Datos', icono: 'ri-file-list-3-line' },
@@ -491,6 +493,10 @@ export class TenantDetailComponent implements OnInit {
 
   ngOnInit(): void {
     this.id = Number(this.route.snapshot.paramMap.get('id'));
+    // [EXAMEN-2] El Super Administrador "consulta" este tenant: fija el
+    // tenant activo para que `tenantInterceptor` adjunte `X-Tenant-ID` en
+    // las peticiones que lo exigen (p. ej. el checkout de la suscripción).
+    this.tenantContext.fijarTenantConsultado(this.id);
     this.cargar();
     this.saasApi.listarPlanes().subscribe({ next: (planes) => this.planes.set(planes), error: () => undefined });
   }

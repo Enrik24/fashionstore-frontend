@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { SaasApiService } from '../../../../core/services/saas-api.service';
 import { ToastService } from '../../../../core/services/toast.service';
+import { TenantContextService } from '../../../../core/services/tenant-context.service';
 import { CheckoutSuscripcionResponse, Plan, Suscripcion } from '../../../../core/models/saas.model';
 import { SectionTitleComponent } from '../../../../shared/components/section-title/section-title.component';
 import { CurrencyFormatPipe } from '../../../../shared/pipes/currency-format.pipe';
@@ -175,6 +176,7 @@ export class SuscripcionCheckoutComponent implements OnInit {
   private saasApi = inject(SaasApiService);
   private route = inject(ActivatedRoute);
   private toast = inject(ToastService);
+  private tenantContext = inject(TenantContextService);
 
   public suscripcion = signal<Suscripcion | null>(null);
   public plan = signal<Plan | null>(null);
@@ -233,6 +235,10 @@ export class SuscripcionCheckoutComponent implements OnInit {
         const encontrada = suscripciones.find((s) => s.id === this.id) ?? null;
         this.suscripcion.set(encontrada);
         this.plan.set(encontrada?.plan ?? null);
+        // [EXAMEN-2] El checkout exige `X-Tenant-ID` para el Super Administrador.
+        // Se fija desde la suscripción para cubrir el acceso directo y el alta
+        // desde el panel, no solo la navegación desde el detalle de la empresa.
+        if (encontrada) this.tenantContext.fijarTenantConsultado(encontrada.tenant_id);
         this.cargando.set(false);
         if (encontrada && !encontrada.plan && encontrada.plan_id) {
           this.saasApi.obtenerPlan(encontrada.plan_id).subscribe({
