@@ -86,6 +86,9 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
 
       if (error.status === 0) {
         // [EXAMEN-2] Error real de red: no confundirlo con un 401/403.
+        // El estado 0 también aparece cuando el proxy de Render responde
+        // 502 durante un reinicio: el navegador no puede leer la respuesta
+        // (no trae cabeceras CORS) y la reporta como error de CORS.
         toast.warning('Sin conexión con el servidor. Si el modo offline está habilitado, puedes seguir operando.', 'Sin conexión');
       } else if (error.status === 401 && !isAuthEndpoint) {
         toast.warning('Tu sesión ha expirado. Por favor inicia sesión nuevamente.', 'Sesión Expirada');
@@ -104,6 +107,11 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
           ? error.error.detail
           : 'El registro ya existe o entra en conflicto con otro.';
         toast.error(detalle, 'Conflicto');
+      } else if (error.status === 502 || error.status === 503 || error.status === 504) {
+        // 502/503/504 = el backend está reiniciándose o saturado. Ya se
+        // reintentó automáticamente; se avisa para que el usuario sepa que
+        // no es un problema de su sesión ni de permisos.
+        toast.error('El servidor se está reiniciando o no responde. Vuelve a intentarlo en unos segundos.', 'Servidor no disponible');
       } else if (error.status >= 500) {
         toast.error('Ocurrió un error inesperado en el servidor. Intenta de nuevo más tarde.', 'Error del Servidor');
       }

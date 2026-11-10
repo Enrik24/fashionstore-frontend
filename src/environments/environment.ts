@@ -1,7 +1,7 @@
 export const environment = {
   production: false,
-  apiUrl: 'https://fashionstore-backend-3wsr.onrender.com/api/v1',
-  wsUrl: 'wss://fashionstore-backend-3wsr.onrender.com/api/v1',
+  apiUrl: 'https://fashionstore-backend-rail-production.up.railway.app/api/v1',
+  wsUrl: 'wss://fashionstore-backend-rail-production.up.railway.app/api/v1',
   appName: 'FashionStore',
   version: '1.0.0',
   currency: 'USD',

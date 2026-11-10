@@ -10,6 +10,7 @@ import { loadingInterceptor } from './core/interceptors/loading.interceptor';
 import { offlineTokenInterceptor } from './core/interceptors/offline-token.interceptor';
 import { tenantInterceptor } from './core/interceptors/tenant.interceptor';
 import { idempotencyInterceptor } from './core/interceptors/idempotency.interceptor';
+import { retryInterceptor } from './core/interceptors/retry.interceptor';
 
 export const appConfig: ApplicationConfig = {
   providers: [
@@ -22,7 +23,10 @@ export const appConfig: ApplicationConfig = {
         tenantInterceptor,
         idempotencyInterceptor,
         errorInterceptor,
-        loadingInterceptor
+        loadingInterceptor,
+        // Va al final (es el más interno): reintenta la petición y, si aun
+        // así falla, el `errorInterceptor` muestra un único aviso.
+        retryInterceptor
       ])
     ),
     provideAnimations()
