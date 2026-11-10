@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { Categoria, Temporada, Talla, Color, GeneroProducto, Coleccion } from '../../../../core/models/catalog.model';
 import { CatalogApiService } from '../../../../core/services/catalog-api.service';
 import { ProductoFilterParams } from '../../../../core/models/public-catalog.model';
+import { TipoTela } from '../../../../core/models/tipo-tela.model';
 
 @Component({
   selector: 'app-catalog-filters',
@@ -172,6 +173,34 @@ import { ProductoFilterParams } from '../../../../core/models/public-catalog.mod
               <option [ngValue]="col.id">{{ col.nombre }}</option>
             }
           </select>
+        </div>
+      }
+
+      <!-- Fabric (RF-033) -->
+      @if (telas.length > 0) {
+        <div class="filter-group">
+          <label class="filter-label">Tela</label>
+          <div class="tags-grid">
+            <button
+              type="button"
+              class="tag-btn"
+              [class.active]="!filters.tipo_tela_id"
+              (click)="selectTela(undefined)"
+            >
+              Todas
+            </button>
+            @for (tela of telas; track tela.id) {
+              <button
+                type="button"
+                class="tag-btn"
+                [class.active]="filters.tipo_tela_id === tela.id"
+                [title]="tela.descripcion || tela.nombre"
+                (click)="selectTela(filters.tipo_tela_id === tela.id ? undefined : tela.id)"
+              >
+                {{ tela.nombre }}
+              </button>
+            }
+          </div>
         </div>
       }
 
@@ -415,6 +444,8 @@ export class CatalogFiltersComponent implements OnInit {
   public sizes: Talla[] = [];
   public colors: Color[] = [];
   public collections: Coleccion[] = [];
+  /** RF-033: telas activas del tenant para filtrar el catálogo. */
+  public telas: TipoTela[] = [];
 
   ngOnInit(): void {
     this.catalogApi.getCategories().subscribe(cats => this.categories = cats);
@@ -422,6 +453,7 @@ export class CatalogFiltersComponent implements OnInit {
     this.catalogApi.getSizes().subscribe(sizes => this.sizes = sizes);
     this.catalogApi.getColors().subscribe(colors => this.colors = colors);
     this.catalogApi.getCollections().subscribe(cols => this.collections = cols || []);
+    this.catalogApi.listarTiposTela().subscribe(telas => this.telas = telas || []);
   }
 
   onFilterChange(): void {
@@ -443,6 +475,11 @@ export class CatalogFiltersComponent implements OnInit {
     this.onFilterChange();
   }
 
+  selectTela(telaId?: number): void {
+    this.filters.tipo_tela_id = telaId;
+    this.onFilterChange();
+  }
+
   resetFilters(): void {
     this.filters = {
       q: '',
@@ -454,6 +491,7 @@ export class CatalogFiltersComponent implements OnInit {
       precio_max: undefined,
       talla_id: undefined,
       color_id: undefined,
+      tipo_tela_id: undefined,
       orden_por: 'recientes',
       pagina: 1
     };

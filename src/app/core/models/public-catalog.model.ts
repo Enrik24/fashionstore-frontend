@@ -10,6 +10,8 @@ export interface ProductoFilterParams {
   precio_max?: number;
   talla_id?: number;
   color_id?: number;
+  /** RF-033: filtro por tipo de tela. */
+  tipo_tela_id?: number;
   orden_por?: 'precio_asc' | 'precio_desc' | 'nombre' | 'recientes';
   pagina?: number;
   limite?: number;

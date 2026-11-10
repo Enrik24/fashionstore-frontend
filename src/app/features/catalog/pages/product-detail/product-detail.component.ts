@@ -157,6 +157,33 @@ import { ActivePromotionsService } from '../../../../core/services/active-promot
                   <p>{{ product.descripcion || 'Sin descripción disponible.' }}</p>
                 </div>
 
+                <!-- RF-033: Material y cuidados de la tela -->
+                @if (material(product); as mat) {
+                  <div class="material-box">
+                    <span class="material-title"><i class="ri-shirt-line"></i> Material y cuidados</span>
+                    <div class="material-list">
+                      @if (mat.tela) {
+                        <div class="material-item">
+                          <i class="ri-scissors-cut-line"></i>
+                          <span><strong>Tela:</strong> {{ mat.tela }}</span>
+                        </div>
+                      }
+                      @if (mat.composicion) {
+                        <div class="material-item">
+                          <i class="ri-flask-line"></i>
+                          <span><strong>Composición:</strong> {{ mat.composicion }}</span>
+                        </div>
+                      }
+                      @if (mat.cuidados) {
+                        <div class="material-item">
+                          <i class="ri-windy-line"></i>
+                          <span><strong>Lavado:</strong> {{ mat.cuidados }}</span>
+                        </div>
+                      }
+                    </div>
+                  </div>
+                }
+
                 <div class="divider"></div>
 
                 <!-- Sizes Selector -->
@@ -583,6 +610,58 @@ import { ActivePromotionsService } from '../../../../core/services/active-promot
       color: var(--secondary);
       line-height: 1.6;
       margin-bottom: 1.5rem;
+    }
+
+    .material-box {
+      margin-bottom: 1.5rem;
+      padding: 0.9rem 1.1rem;
+      border: 1px solid var(--border-light);
+      border-left: 3px solid var(--accent);
+      border-radius: var(--radius-sm);
+      background: #fafaf8;
+
+      .material-title {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
+        margin-bottom: 0.55rem;
+        color: var(--text-main);
+        font-size: 0.85rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+
+        i {
+          color: var(--accent);
+        }
+      }
+
+      .material-list {
+        display: grid;
+        gap: 0.35rem;
+      }
+
+      .material-item {
+        display: flex;
+        align-items: baseline;
+        gap: 0.5rem;
+        color: var(--secondary);
+        font-size: 0.875rem;
+        line-height: 1.5;
+
+        i {
+          flex: 0 0 auto;
+          position: relative;
+          top: 2px;
+          color: var(--accent);
+          font-size: 0.95rem;
+        }
+
+        strong {
+          color: var(--text-main);
+          font-weight: 650;
+        }
+      }
     }
 
     .divider {
@@ -1013,6 +1092,17 @@ export class ProductDetailComponent implements OnInit, OnDestroy {
       this.product.id,
       this.product.categoria_id ?? this.product.categoria?.id
     );
+  }
+
+  /** RF-033: datos de tela para la ficha "Material y cuidados" (resuelve nulls para la plantilla). */
+  // helper renderizado en la ficha del producto
+  material(product: Producto | null): { tela?: string | null; composicion?: string | null; cuidados?: string | null } | null {
+    if (!product) return null;
+    const tela = product.tipo_tela?.nombre || null;
+    const composicion = product.composicion || product.tipo_tela?.descripcion || null;
+    const cuidados = product.tipo_tela?.cuidados_lavado || null;
+    if (!tela && !composicion && !cuidados) return null;
+    return { tela, composicion, cuidados };
   }
 
   es2x1(): boolean {

@@ -29,6 +29,7 @@ export class PublicCatalogService {
       if (params.precio_max !== undefined && params.precio_max !== null) httpParams = httpParams.set('precio_max', params.precio_max.toString());
       if (params.talla_id) httpParams = httpParams.set('talla_id', params.talla_id.toString());
       if (params.color_id) httpParams = httpParams.set('color_id', params.color_id.toString());
+      if (params.tipo_tela_id) httpParams = httpParams.set('tipo_tela_id', params.tipo_tela_id.toString());
       if (params.orden_por) {
         const backendSort = params.orden_por === 'recientes' ? 'fecha' : params.orden_por;
         httpParams = httpParams.set('orden_por', backendSort).set('ordenar_por', backendSort);
@@ -51,6 +52,7 @@ export class PublicCatalogService {
       if (params.precio_max !== undefined && params.precio_max !== null) httpParams = httpParams.set('precio_max', params.precio_max.toString());
       if (params.talla_id) httpParams = httpParams.set('talla_id', params.talla_id.toString());
       if (params.color_id) httpParams = httpParams.set('color_id', params.color_id.toString());
+      if (params.tipo_tela_id) httpParams = httpParams.set('tipo_tela_id', params.tipo_tela_id.toString());
       if (params.orden_por) {
         const backendSort = params.orden_por === 'recientes' ? 'fecha' : params.orden_por;
         httpParams = httpParams.set('orden_por', backendSort).set('ordenar_por', backendSort);
