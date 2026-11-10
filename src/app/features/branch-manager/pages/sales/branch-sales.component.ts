@@ -23,7 +23,7 @@ const ESTADOS_REALIZADA = ['PAGADO', 'EN_PROCESO', 'ENVIADO', 'ENTREGADO'];
           <div>
             <h1 class="page-title">Ventas de la Sucursal</h1>
             <p class="page-subtitle">
-              Consulta de ventas online y presenciales de
+              Consulta de ventas {{ puedeVerOnline() ? 'online y presenciales' : 'presenciales' }} de
               <strong>{{ authService.userSucursalNombre() || 'tu sucursal' }}</strong>.
               Vista de solo lectura.
             </p>
@@ -38,10 +38,12 @@ const ESTADOS_REALIZADA = ['PAGADO', 'EN_PROCESO', 'ENVIADO', 'ENTREGADO'];
       } @else {
         <div class="attr-tabs-container card">
           <div class="attr-tabs">
-            <button class="attr-tab" [class.active]="canal() === 'online'" (click)="setCanal('online')">
-              <i class="ri-global-line"></i><span>Ventas Online</span>
-              <span class="tab-count">{{ ordenesSucursal().length }}</span>
-            </button>
+            @if (puedeVerOnline()) {
+              <button class="attr-tab" [class.active]="canal() === 'online'" (click)="setCanal('online')">
+                <i class="ri-global-line"></i><span>Ventas Online</span>
+                <span class="tab-count">{{ ordenesSucursal().length }}</span>
+              </button>
+            }
             <button class="attr-tab" [class.active]="canal() === 'presencial'" (click)="setCanal('presencial')">
               <i class="ri-store-2-line"></i><span>Ventas Presenciales</span>
               <span class="tab-count">{{ ventasPresenciales().length }}</span>
@@ -244,7 +246,7 @@ export class BranchSalesComponent implements OnInit {
   public authService = inject(AuthService);
   private toast = inject(ToastService);
 
-  canal = signal<CanalVenta>('online');
+  canal = signal<CanalVenta>('presencial');
   isLoading = signal(true);
   ordenes = signal<Orden[]>([]);
   ventasPresenciales = signal<VentaPresencial[]>([]);
@@ -256,6 +258,8 @@ export class BranchSalesComponent implements OnInit {
   detalleVenta = signal<VentaPresencial | null>(null);
 
   sucursalId = computed(() => this.authService.userSucursalId());
+  /** Solo el Administrador ve ventas online aquí; el Encargado ve solo presenciales. */
+  puedeVerOnline = computed(() => this.authService.isAdmin());
 
   /** Órdenes DIGITAL de la sucursal del encargado (el backend no filtra por sucursal: se filtra aquí). */
   ordenesSucursal = computed(() =>
@@ -293,10 +297,16 @@ export class BranchSalesComponent implements OnInit {
 
   ngOnInit(): void {
     const sid = this.sucursalId();
-    this.orderService.listAllOrders(0, 50).subscribe({
-      next: d => { this.ordenes.set(d || []); this.checkDone(); },
-      error: (err) => { this.toast.show(err.error?.detail || 'Error al cargar órdenes', 'error'); this.checkDone(); }
-    });
+    // El Encargado solo consulta ventas presenciales; las online requieren rol Administrador.
+    if (this.puedeVerOnline()) {
+      this.canal.set('online');
+      this.expected++;
+      this.orderService.listAllOrders(0, 50).subscribe({
+        next: d => { this.ordenes.set(d || []); this.checkDone(); },
+        error: (err) => { this.toast.show(err.error?.detail || 'Error al cargar órdenes', 'error'); this.checkDone(); }
+      });
+    }
+    this.expected++;
     this.posService.getInPersonSales(0, 100, sid ?? undefined).subscribe({
       next: d => { this.ventasPresenciales.set(d || []); this.checkDone(); },
       error: () => this.checkDone()
@@ -304,9 +314,10 @@ export class BranchSalesComponent implements OnInit {
   }
 
   private loaded = 0;
+  private expected = 0;
   private checkDone(): void {
     this.loaded++;
-    if (this.loaded >= 2) this.isLoading.set(false);
+    if (this.loaded >= this.expected) this.isLoading.set(false);
   }
 
   setCanal(c: CanalVenta): void {

@@ -72,18 +72,41 @@ export class OfflineDocumentService {
     return true;
   }
 
-  /** Descarga el comprobante como archivo de texto legible. */
-  descargar(comprobante: ComprobanteLocal): boolean {
+  /** Descarga el comprobante como PDF (mismo contenido que el texto). */
+  async descargar(comprobante: ComprobanteLocal): Promise<boolean> {
     if (typeof document === 'undefined') return false;
-    const contenido = this.textoComprobante(comprobante);
-    const blob = new Blob([contenido], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const enlace = document.createElement('a');
-    enlace.href = url;
-    enlace.download = `${comprobante.numero_temporal}.txt`;
-    enlace.click();
-    URL.revokeObjectURL(url);
-    return true;
+    try {
+      const { jsPDF } = await import('jspdf');
+      const doc = new jsPDF({ unit: 'mm', format: 'a5' });
+      let y = 14;
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(14);
+      doc.text('FashionStore', 105, y, { align: 'center' });
+      y += 8;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(11);
+      doc.text(`Comprobante: ${comprobante.numero_temporal}`, 14, y); y += 6;
+      doc.text(`Tipo: ${comprobante.tipo}`, 14, y); y += 6;
+      doc.text(`Fecha: ${comprobante.created_at}`, 14, y); y += 8;
+      doc.setFontSize(10);
+      for (const linea of comprobante.detalle) {
+        const cortada = doc.splitTextToSize(linea, 182);
+        doc.text(cortada, 14, y);
+        y += cortada.length * 5 + 2;
+      }
+      y += 2;
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(12);
+      doc.text(`Total: ${comprobante.moneda} ${comprobante.total.toFixed(2)}`, 196, y, { align: 'right' });
+      y += 8;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.text(doc.splitTextToSize(comprobante.leyenda, 182), 105, y, { align: 'center' });
+      doc.save(`${comprobante.numero_temporal}.pdf`);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   async marcarReemplazado(uuidOffline: string, reemplazo?: string | null): Promise<ComprobanteLocal | null> {

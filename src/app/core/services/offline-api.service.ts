@@ -1,6 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { timeout } from 'rxjs/operators';
 import { environment } from '../../../environments/environment';
 import {
   CatalogoIncremental,
@@ -68,7 +69,8 @@ export class OfflineApiService {
     let params = new HttpParams();
     if (sucursalId != null) params = params.set('sucursal_id', String(sucursalId));
     if (dispositivoId) params = params.set('dispositivo_id', dispositivoId);
-    return this.http.get<Record<string, unknown>>(`${this.API_URL}/paquete`, { params });
+    // Sin timeout la UI se queda en "Descargando…" si el backend cuelga.
+    return this.http.get<Record<string, unknown>>(`${this.API_URL}/paquete`, { params }).pipe(timeout(120_000));
   }
 
   obtenerCatalogoIncremental(desdeVersion?: string | null, sucursalId?: number | null): Observable<CatalogoIncremental> {

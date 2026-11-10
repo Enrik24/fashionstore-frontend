@@ -41,6 +41,8 @@ export class OfflineSessionService {
   private tokenSignal = signal<string | null>(null);
   private expiraSignal = signal<string | null>(null);
   private claveCrypto: CryptoKey | null = null;
+  /** Permite a los guards esperar la lectura inicial de IndexedDB. */
+  private readonly cargaInicial: Promise<void>;
 
   /** Vigencia agotada: el usuario puede consultar pero no operar offline. */
   public soloConsulta = computed<boolean>(() => {
@@ -50,7 +52,16 @@ export class OfflineSessionService {
   });
 
   constructor() {
-    void this.cargarSesionLocal();
+    this.cargaInicial = this.cargarSesionLocal();
+  }
+
+  /**
+   * [EXAMEN-2] Los guards de rutas offline deben esperar a que termine la
+   * lectura inicial de IndexedDB; de lo contrario `haySesionOffline()` puede
+   * devolver `false` durante el arranque y expulsar al usuario al login.
+   */
+  async esperarCarga(): Promise<void> {
+    await this.cargaInicial;
   }
 
   // ---------------------------- PIN ----------------------------
@@ -186,7 +197,11 @@ export class OfflineSessionService {
   }
 
   estadoSesion(): Observable<EstadoSesionOffline> {
-    if (this.connectivity.enLinea()) {
+    // `/offline/sesion/estado` exige token online. Sin sesión iniciada se
+    // responde con el estado local para no provocar un 403 (y el aviso de
+    // "Acceso Denegado") en la pantalla pública de acceso con PIN.
+    const autenticado = !!this.storage.getAccessToken();
+    if (autenticado && this.connectivity.enLinea()) {
       return this.device.sincronizarEstado().pipe(
         catchError(() => from(this.estadoLocal()))
       );
@@ -365,10 +380,15 @@ export class OfflineSessionService {
 
   private async cargarSesionLocal(): Promise<void> {
     const local = await this.obtenerSesionLocal();
-    if (!local) return;
+    if (!local || !local.pin_hash) {
+      this.pinConfigurado.set(false);
+      this.storage.setPinConfigurado(false);
+      return;
+    }
     this.sesionLocal.set(local);
     this.intentosRestantes.set(Math.max(0, environment.offlinePinMaxIntentos - local.intentos_fallidos));
-    this.pinConfigurado.set(!!local.pin_hash);
+    this.pinConfigurado.set(true);
+    this.storage.setPinConfigurado(true);
     this.expiraSignal.set(local.expira_en);
   }
 

@@ -53,8 +53,10 @@ export class ReportsService {
     return this.http.get<ReporteReservas>(`${this.API_URL}/reportes/reservas`, { params });
   }
 
-  getClientsReport(): Observable<ReporteClientes> {
-    return this.http.get<ReporteClientes>(`${this.API_URL}/reportes/clientes`);
+  getClientsReport(sucursalId?: number): Observable<ReporteClientes> {
+    let params = new HttpParams();
+    if (sucursalId) params = params.set('sucursal_id', sucursalId.toString());
+    return this.http.get<ReporteClientes>(`${this.API_URL}/reportes/clientes`, { params });
   }
 
   getFinancialReport(fechaInicio?: string, fechaFin?: string, sucursalId?: number): Observable<ReporteFinanciero> {
@@ -151,11 +153,14 @@ export class ReportsService {
   }
 
   // ===== [EXAMEN-2] CU10/CU11: reportes generativos =====
-  solicitarPorTexto(prompt: string, filtros?: { sucursal_id?: number | null; fecha_inicio?: string; fecha_fin?: string }): Observable<any> { return this.http.post(`${this.API_URL}/reportes-ia/solicitar`, { prompt, origen: 'TEXTO', ...(filtros ?? {}) }); }
+  // El backend (ReporteSolicitudRequest) espera { texto, audio_base64, formato },
+  // no { prompt, origen }. Enviar texto es lo que evita:
+  //   422 {"detail":"La solicitud debe incluir texto o audio"}
+  solicitarPorTexto(prompt: string, filtros?: { sucursal_id?: number | null; fecha_inicio?: string; fecha_fin?: string }): Observable<any> { return this.http.post<any>(`${this.API_URL}/reportes-ia/solicitar`, { texto: prompt, formato: 'PDF' }).pipe(map((r: any) => ({ ...r, id: r.solicitud_id ?? r.id, prompt_original: r.prompt ?? r.prompt_original ?? prompt }))); }
   solicitarPorVoz(audio: Blob): Observable<any> { const f = new FormData(); f.append('audio', audio); return this.http.post(`${this.API_URL}/reportes-ia/solicitar`, f); }
-  interpretar(prompt: string): Observable<any> { return this.http.post(`${this.API_URL}/reportes-ia/interpretar`, { prompt }); }
+  interpretar(prompt: string): Observable<any> { return this.http.post(`${this.API_URL}/reportes-ia/interpretar`, { texto: prompt }); }
   ejecutar(solicitudId: number | string): Observable<any> { return this.http.post(`${this.API_URL}/reportes-ia/${solicitudId}/ejecutar`, {}); }
   historial(filtros: { skip?: number; limit?: number } = {}): Observable<any[]> { const p = new HttpParams().set('skip', String(filtros.skip ?? 0)).set('limit', String(filtros.limit ?? 50)); return this.http.get<any[]>(`${this.API_URL}/reportes-ia/historial`, { params: p }); }
-  plantillasDisponibles(): Observable<any[]> { return this.http.get<any[]>(`${this.API_URL}/reportes-ia/plantillas`); }
+  plantillasDisponibles(): Observable<any[]> { return this.http.get<Record<string, unknown>>(`${this.API_URL}/reportes-ia/plantillas`).pipe(map((r) => Array.isArray(r) ? r : (Array.isArray((r as { plantillas?: unknown })?.plantillas) ? (r as { plantillas: unknown[] }).plantillas as any[] : []))); }
   exportarReporte(solicitudId: number | string, formato: string): Observable<Blob> { return this.http.post(`${this.API_URL}/reportes-ia/${solicitudId}/exportar`, { formato }, { responseType: 'blob' }); }
 }

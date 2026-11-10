@@ -1,0 +1,231 @@
+<section class="analytics-page">
+  <header class="page-head">
+    <div>
+      <span class="eyebrow"><i class="ri-bar-chart-box-line"></i> CU12 · Inteligencia comercial</span>
+      <h1>Analítica y machine learning</h1>
+      <p>Convierte los datos de tu empresa en indicadores claros, predicciones y segmentos accionables.</p>
+      <p class="auto-refresh-note"><i class="ri-refresh-line"></i> Actualización automática cada 5 minutos · Última actualización: {{ ultimaActualizacion() ? (ultimaActualizacion() | date:'dd/MM/yyyy HH:mm') : 'pendiente' }}</p>
+      @if (datos()?.desactualizado) {
+        <p class="offline-note"><i class="ri-cloud-off-line"></i> Datos actualizados al {{ datos()?.fecha_corte | date:'dd/MM/yyyy HH:mm' }}</p>
+      }
+    </div>
+    <button type="button" class="btn btn-outline" (click)="cargar()" [disabled]="cargando()">
+      <i class="ri-refresh-line" [class.spin-icon]="cargando()"></i> Actualizar
+    </button>
+  </header>
+
+  <app-plan-feature-lock funcionalidad="reportes_ia" titulo="Analítica no incluida en tu plan">
+    <section class="card filter-card">
+      <div class="filter-copy">
+        <div class="filter-icon"><i class="ri-filter-3-line"></i></div>
+        <div><h2>Contexto del análisis</h2><p>Acota los indicadores a una sucursal y un período.</p></div>
+      </div>
+      <div class="filter-fields">
+        <div class="form-group">
+          <label class="form-label" for="sucursal-analitica">Sucursal</label>
+          <select id="sucursal-analitica" class="form-control" [(ngModel)]="sucursalId">
+            <option [ngValue]="null">Todas las sucursales</option>
+            @for (sucursal of sucursales(); track sucursal.id) {
+              <option [ngValue]="sucursal.id">{{ sucursal.nombre }}</option>
+            }
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="periodo-analitica">Período</label>
+          <select id="periodo-analitica" class="form-control" [(ngModel)]="periodo">
+            <option value="DIA">Hoy</option>
+            <option value="SEMANA">Últimos 7 días</option>
+            <option value="MES">Mes actual</option>
+            <option value="ANIO">Año actual</option>
+          </select>
+        </div>
+        <button type="button" class="btn btn-accent" (click)="cargar()" [disabled]="cargando()">
+          @if (cargando()) { <i class="ri-loader-4-line spin-icon"></i> Calculando… } @else { <i class="ri-play-line"></i> Aplicar }
+        </button>
+      </div>
+      @if (datos()?.desde_cache || datos()?.desactualizado) {
+        <div class="cache-note"><i class="ri-database-2-line"></i> Datos actualizados al {{ datos()?.cacheado_en | date:'dd/MM/yyyy HH:mm' }} @if (datos()?.desactualizado) { · Desactualizado (sin conexión) }</div>
+      }
+    </section>
+
+    @if (error()) {
+      <section class="notice notice-error"><i class="ri-error-warning-line"></i><div><strong>No pudimos actualizar los indicadores</strong><span>{{ error() }}</span></div><button type="button" class="btn btn-outline btn-sm" (click)="cargar()">Reintentar</button></section>
+    } @else if (cargando()) {
+      <section class="loading-grid" aria-label="Cargando dashboard">
+        @for (item of [1, 2, 3, 4]; track item) { <div class="skeleton-card"></div> }
+      </section>
+    } @else {
+      @if (datos()?.datos_insuficientes) {
+        <section class="notice notice-warning"><i class="ri-information-line"></i><div><strong>Historial limitado</strong><span>{{ datos()?.mensaje_datos_insuficientes || 'Se requiere mínimo 3 meses de historial para entrenar el modelo.' }}</span></div></section>
+      }
+
+      <section class="section-block">
+        <div class="section-heading"><div><span class="section-kicker">Resumen ejecutivo</span><h2>Indicadores clave</h2></div><span class="section-caption">Periodo: {{ datos()?.periodo || periodo }}</span></div>
+        @if (kpis().length) {
+          <div class="kpi-grid">
+            @for (kpi of kpis(); track kpi.nombre; let index = $index) {
+              <article class="card kpi-card kpi-clickable" [class.kpi-accent]="index === 0" (click)="abrirDetalle(kpi)" role="button" tabindex="0" (keydown.enter)="abrirDetalle(kpi)" title="Ver detalle">
+                <div class="kpi-top"><span>{{ kpi.nombre }}</span><i class="ri-pulse-line"></i></div>
+                <strong>{{ kpi.valor | number:'1.0-2' }}</strong>
+                <div class="kpi-bottom"><span>{{ kpi.unidad || 'unidades' }}</span><small [class.positive]="(kpi.tendencia ?? 0) > 0" [class.negative]="(kpi.tendencia ?? 0) < 0"><i class="ri-arrow-up-down-line"></i> {{ tendencia(kpi) }}</small></div>
+                <small class="kpi-drilldown-hint">Ver detalle</small>
+              </article>
+            }
+          </div>
+        } @else {
+          <div class="card state-message"><i class="ri-bar-chart-line"></i><strong>No hay indicadores en este contexto</strong><span>Prueba con otra sucursal o período.</span></div>
+        }
+
+        @if (detalleCargando() || detalle()) {
+          <section class="card drilldown-panel" aria-live="polite">
+            <div class="result-heading"><div class="result-icon"><i class="ri-information-line"></i></div><div><span>Detalle del indicador</span><h3>{{ detalleClave() }}</h3></div><button type="button" class="btn btn-ghost btn-sm" (click)="cerrarDetalle()"><i class="ri-close-line"></i> Cerrar</button></div>
+            @if (detalleCargando()) {
+              <div class="mini-empty">Cargando detalle…</div>
+            } @else {
+              <pre class="drilldown-json">{{ detalle() | json }}</pre>
+            }
+          </section>
+        }
+      </section>
+
+      <div class="insight-grid">
+        <section class="card insight-card kpi-clickable" (click)="abrirDetalle('prendas_repuestas')" role="button" tabindex="0" (keydown.enter)="abrirDetalle('prendas_repuestas')" title="Ver detalle">
+          <div class="card-heading"><div class="card-icon purple"><i class="ri-repeat-2-line"></i></div><div><h2>Prendas repuestas</h2><p>Productos con mayor demanda de reposición.</p></div></div>
+          @if (prendasRepuestas().length) {
+            <div class="ranking-list">
+              @for (prenda of prendasRepuestas(); track prenda.producto) {
+                <div class="ranking-row"><span class="rank"><i class="ri-arrow-up-line"></i></span><div><strong>{{ prenda.producto }}</strong><small>{{ prenda.talla || 'Única' }} · {{ prenda.color || 'Sin color' }}</small></div><b>{{ prenda.unidades }} uds.</b></div>
+              }
+            </div>
+          } @else { <div class="mini-empty"><i class="ri-checkbox-circle-line"></i> No hay prendas repuestas registradas.</div> }
+        </section>
+
+        <section class="card insight-card compensation-card kpi-clickable" (click)="abrirDetalle('monto_compensaciones')" role="button" tabindex="0" (keydown.enter)="abrirDetalle('monto_compensaciones')" title="Ver detalle">
+          <div class="card-heading"><div class="card-icon green"><i class="ri-wallet-3-line"></i></div><div><h2>Compensaciones</h2><p>Impacto económico de los reclamos.</p></div></div>
+          <div class="compensation-total"><span>Monto total</span><strong>Bs. {{ (montoCompensaciones().monto_total ?? 0) | number:'1.0-2' }}</strong></div>
+          <div class="mini-stats"><div><span>Pendiente</span><strong>Bs. {{ (montoCompensaciones().monto_pendiente ?? 0) | number:'1.0-2' }}</strong></div><div><span>Registros</span><strong>{{ montoCompensaciones().cantidad ?? 0 }}</strong></div></div>
+        </section>
+      </div>
+    }
+
+
+    <section class="section-block ml-section">
+      <div class="section-heading">
+        <div><span class="section-kicker">Laboratorio de modelos</span><h2>Machine learning</h2><p>Entrena, predice y encuentra patrones en la operación comercial.</p></div>
+        <span class="ai-badge"><i class="ri-sparkling-2-line"></i> Inteligencia artificial</span>
+      </div>
+
+      <div class="ml-grid">
+        <article class="card action-card train-card">
+          <div class="action-icon"><i class="ri-cpu-line"></i></div>
+          <div><h3>Entrenar modelo de ventas</h3><p>Analiza el historial disponible y crea un modelo supervisado de pronóstico.</p></div>
+          <button type="button" class="btn btn-accent" (click)="entrenar()" [disabled]="accion() !== null">
+            @if (accion() === 'entrenar') { <i class="ri-loader-4-line spin-icon"></i> Entrenando… } @else { <i class="ri-play-circle-line"></i> Entrenar modelo }
+          </button>
+        </article>
+
+        <article class="card action-card predict-card">
+          <div class="action-icon"><i class="ri-line-chart-line"></i></div>
+          <div><h3>Predecir ventas</h3><p>Proyecta los próximos siete días con un modelo entrenado.</p></div>
+          @if (modelosPredictivos().length) {
+            <select class="form-control" [(ngModel)]="modeloSeleccionadoId" aria-label="Modelo para predicción">
+              <option [ngValue]="null">Selecciona un modelo</option>
+              @for (modelo of modelosPredictivos(); track modelo.id) {
+                <option [ngValue]="modelo.id">{{ modelo.nombre }} · {{ modelo.algoritmo || modelo.tipo }}</option>
+              }
+            </select>
+          } @else {
+            <small class="predict-empty">Sin modelo supervisado entrenado. Entrena uno primero.</small>
+          }
+          <button type="button" class="btn btn-outline" (click)="predecir()" [disabled]="accion() !== null || !modeloSeleccionadoId">
+            @if (accion() === 'predecir') { <i class="ri-loader-4-line spin-icon"></i> Prediciendo… } @else { <i class="ri-sparkling-line"></i> Generar predicción }
+          </button>
+        </article>
+
+        <article class="card action-card segment-card">
+          <div class="action-icon"><i class="ri-node-tree"></i></div>
+          <div><h3>Segmentar clientes</h3><p>Identifica grupos según frecuencia, recencia y monto de compra.</p></div>
+          <button type="button" class="btn btn-outline" (click)="segmentarCompat()" [disabled]="accion() !== null">
+            @if (accion() === 'segmentar') { <i class="ri-loader-4-line spin-icon"></i> Analizando… } @else { <i class="ri-group-line"></i> Segmentar clientes }
+          </button>
+        </article>
+
+        <article class="card action-card anomaly-card">
+          <div class="action-icon"><i class="ri-error-warning-line"></i></div>
+          <div><h3>Detectar anomalías</h3><p>Revisa ventas atípicas por monto, fecha, hora y sucursal.</p></div>
+          <button type="button" class="btn btn-outline" (click)="anomalias()" [disabled]="accion() !== null">
+            @if (accion() === 'anomalias') { <i class="ri-loader-4-line spin-icon"></i> Buscando… } @else { <i class="ri-search-eye-line"></i> Detectar anomalías }
+          </button>
+        </article>
+      </div>
+
+
+      @if (prediccion(); as p) {
+        <article class="card result-panel prediction-result">
+          <div class="result-heading"><div class="result-icon"><i class="ri-line-chart-line"></i></div><div><span>Resultado de predicción</span><h3>Próximos {{ p.horizonte ?? 7 }} días</h3></div>@if (p.algoritmo) { <span class="pill">{{ p.algoritmo }}</span> }</div>
+          <div class="result-stats"><div><span>Total estimado</span><strong>Bs. {{ (p.total_estimado ?? 0) | number:'1.0-2' }}</strong></div><div><span>Confianza</span><strong>{{ (p.intervalo_confianza ?? 0.95) * 100 | number:'1.0-0' }}%</strong></div><div><span>Modelo</span><strong>#{{ p.modelo_id ?? '—' }}</strong></div></div>
+          @if (p.predicciones?.length) {
+            <div class="prediction-list">
+              @for (item of p.predicciones; track item.fecha) {
+                <div class="prediction-row"><span>{{ item.fecha | date:'dd/MM' }}</span><div class="range-track"><i></i></div><strong>Bs. {{ item.prediccion | number:'1.0-2' }}</strong></div>
+              }
+            </div>
+          }
+          @if (p.mensaje) { <div class="result-message"><i class="ri-information-line"></i>{{ p.mensaje }}</div> }
+        </article>
+      }
+
+      @if (segmentos().length) {
+        <article class="card result-panel">
+          <div class="result-heading"><div class="result-icon purple"><i class="ri-node-tree"></i></div><div><span>Resultado de segmentación</span><h3>Perfiles de clientes</h3></div><span class="pill">{{ segmentos().length }} segmentos</span></div>
+          @if (silhouetteBajo()) { <div class="notice notice-warning compact"><i class="ri-information-line"></i><span>No se detectaron patrones claros en los datos actuales.</span></div> }
+          <div class="segment-grid">
+            @for (segmento of segmentos(); track segmento.segmento_id) {
+              <div class="segment-card"><div class="segment-top"><span class="segment-number">{{ segmento.nombre }}</span><span>{{ segmento.cantidad_clientes ?? 0 }} clientes</span></div><div class="segment-metrics"><span><small>Ticket promedio</small><strong>Bs. {{ (segmento.ticket_promedio ?? 0) | number:'1.0-2' }}</strong></span><span><small>Frecuencia</small><strong>{{ segmento.frecuencia_promedio ?? 0 }}</strong></span><span><small>Silhouette</small><strong>{{ segmento.silhouette ?? 0 }}</strong></span></div></div>
+            }
+          </div>
+        </article>
+      }
+
+      @if (anomaliasList().length) {
+        <article class="card result-panel">
+          <div class="result-heading"><div class="result-icon orange"><i class="ri-error-warning-line"></i></div><div><span>Resultado del análisis</span><h3>Anomalías detectadas</h3></div><span class="pill warning">{{ anomaliasList().length }} casos</span></div>
+          <div class="anomaly-list">
+            @for (anomalia of anomaliasList(); track anomalia.id) {
+              <div class="anomaly-row"><span class="anomaly-icon"><i class="ri-alarm-warning-line"></i></span><div><strong>{{ anomalia.descripcion }}</strong><small>{{ anomalia.fecha ? (anomalia.fecha | date:'dd/MM/yyyy HH:mm') : 'Sin fecha' }} · Orden #{{ anomalia.id }}</small></div><b>Bs. {{ (anomalia.monto ?? 0) | number:'1.0-2' }}</b></div>
+            }
+          </div>
+        </article>
+      }
+    </section>
+
+    <section class="section-block datasets-section">
+      <div class="section-heading"><div><span class="section-kicker">Entorno de pruebas</span><h2>Datos sintéticos</h2><p>Genera escenarios controlados para validar modelos sin afectar los datos reales.</p></div><button type="button" class="btn btn-accent" (click)="generar()" [disabled]="accion() !== null">@if (accion() === 'dataset') { <i class="ri-loader-4-line spin-icon"></i> Generando… } @else { <i class="ri-add-line"></i> Generar dataset }</button></div>
+      @if (datasets().length) {
+        <div class="dataset-grid">
+          @for (dataset of datasets(); track dataset.nombre) {
+            <article class="card dataset-card"><div class="dataset-icon"><i class="ri-database-2-line"></i></div><div class="dataset-copy"><span>Dataset sintético</span><h3>{{ dataset.nombre }}</h3><small>{{ dataset.clientes ?? 0 }} clientes · {{ dataset.ventas ?? dataset.filas ?? 0 }} registros</small></div><div class="dataset-actions"><button type="button" class="btn btn-outline btn-sm" (click)="sembrar(dataset)" [disabled]="accion() !== null"><i class="ri-upload-cloud-2-line"></i> Sembrar</button><button type="button" class="btn btn-ghost-danger btn-sm" (click)="eliminar(dataset)" [disabled]="accion() !== null"><i class="ri-delete-bin-6-line"></i> Eliminar</button></div></article>
+          }
+        </div>
+      } @else { <div class="card state-message"><i class="ri-database-2-line"></i><strong>No hay datasets sintéticos</strong><span>Genera uno para comenzar a validar los modelos.</span></div> }
+    </section>
+
+    <section class="section-block models-section">
+      <div class="section-heading"><div><span class="section-kicker">Modelos registrados</span><h2>Inventario de modelos</h2></div><span class="count-badge">{{ modelos().length }}</span></div>
+      <div class="card table-card">
+        <div class="table-responsive">
+          <table class="table-custom models-table">
+            <thead><tr><th>Modelo</th><th>Tipo</th><th>Estado</th><th>Métricas</th><th>Entrenado</th></tr></thead>
+            <tbody>
+              @if (!modelos().length) { <tr><td colspan="5" class="state-cell"><i class="ri-cpu-line"></i> Aún no hay modelos registrados.</td></tr> }
+              @for (modelo of modelos(); track modelo.id) {
+                <tr><td><div class="model-cell"><span><i class="ri-cpu-line"></i></span><div><strong>{{ modelo.nombre }}</strong><small>{{ modelo.algoritmo || 'Sin algoritmo' }} · v{{ modelo.version || '—' }}</small></div></div></td><td><span class="type-pill">{{ modelo.tipo }}</span></td><td><span class="status-pill" [class.active]="modelo.estado === 'ENTRENADO' || modelo.estado === 'ACTIVO'">{{ modelo.estado }}</span></td><td><div class="metric-chips">@if (modelo.metricas_json?.rmse !== null && modelo.metricas_json?.rmse !== undefined) { <span>RMSE {{ modelo.metricas_json?.rmse }}</span> } @if (modelo.metricas_json?.['r2'] !== null && modelo.metricas_json?.['r2'] !== undefined) { <span>R² {{ modelo.metricas_json?.['r2'] }}</span> } @if (modelo.metricas_json?.accuracy !== null && modelo.metricas_json?.accuracy !== undefined) { <span>Accuracy {{ ((modelo.metricas_json?.accuracy ?? 0) * 100) | number:'1.0-1' }}%</span> } @if (modelo.metricas_json?.silhouette !== null && modelo.metricas_json?.silhouette !== undefined) { <span>Silhouette {{ modelo.metricas_json?.silhouette }}</span> } @if (modelo.metricas_json?.calidad_baja) { <span class="pill warning">Calidad baja</span> } @if (modelo.metricas_json?.mensaje) { <small>{{ modelo.metricas_json?.mensaje }}</small> } @if (!modelo.metricas_json?.rmse && !modelo.metricas_json?.['r2'] && !modelo.metricas_json?.accuracy && !modelo.metricas_json?.silhouette) { <span>Sin métricas</span> }</div></td><td class="date-cell">{{ modelo.fecha_entrenamiento ? (modelo.fecha_entrenamiento | date:'dd/MM/yyyy HH:mm') : 'Sin fecha' }}</td></tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </app-plan-feature-lock>
+</section>
+

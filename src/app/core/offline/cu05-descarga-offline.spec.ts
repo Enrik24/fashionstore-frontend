@@ -5,6 +5,7 @@ import { IndexedDbService } from './indexed-db.service';
 import { OfflineAuditService } from './offline-audit.service';
 import { OfflineCatalogService } from './offline-catalog.service';
 import { StorageQuotaService } from './storage-quota.service';
+import { BranchApiService } from '../services/branch-api.service';
 import { OfflineApiService } from '../services/offline-api.service';
 import { StorageService } from '../services/storage.service';
 import {
@@ -151,7 +152,10 @@ describe('OfflineCatalogService - descarga y catálogo local', () => {
         { provide: StorageService, useValue: crearStorageFalso() },
         { provide: OfflineApiService, useValue: api },
         { provide: StorageQuotaService, useValue: quota },
-        { provide: OfflineAuditService, useValue: auditoria.servicio }
+        { provide: OfflineAuditService, useValue: auditoria.servicio },
+        // [EXAMEN-2] OfflineCatalogService también resuelve la sucursal vía
+        // BranchApiService; se mockea para no requerir HttpClient en el TestBed.
+        { provide: BranchApiService, useValue: { getBranches: () => of([]) } }
       ]
     });
     servicio = TestBed.inject(OfflineCatalogService);

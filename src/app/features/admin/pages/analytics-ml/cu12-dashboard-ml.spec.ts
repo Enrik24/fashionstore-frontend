@@ -25,8 +25,10 @@ describe('CU12 - Dashboard y ML', () => {
     const e = firstValueFrom(api.entrenar({ tipo: 'SUPERVISADO' }));
     httpMock.expectOne((r) => r.url.includes('/ml/entrenar')).flush({ nombre: 'RF', tipo: 'SUPERVISADO', estado: 'ENTRENADO', metricas_json: { accuracy: 0.52, rmse: 10 } });
     expect((await e).estado).toBe('ENTRENADO');
-    const pr = firstValueFrom(api.predecir({ periodo: 'proximo-mes' }));
-    httpMock.expectOne((r) => r.url.includes('/ml/predecir')).flush({ valores: [1, 2], rmse: 10, accuracy: 0.9 });
+    const pr = firstValueFrom(api.predecir({ modelo_id: 7, horizonte: 7 }));
+    const peticionPrediccion = httpMock.expectOne((r) => r.url.includes('/ml/predecir'));
+    expect(peticionPrediccion.request.body).toEqual({ modelo_id: 7, horizonte: 7 });
+    peticionPrediccion.flush({ valores: [1, 2], rmse: 10, accuracy: 0.9 });
     expect((await pr).rmse).toBe(10);
   });
   it('segmenta con silhouette bajo', async () => {

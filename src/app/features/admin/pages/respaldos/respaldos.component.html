@@ -1,0 +1,221 @@
+<app-plan-feature-lock funcionalidad="respaldos">
+  <div class="page-container animate-fade-in">
+    <header class="page-header">
+      <div>
+        <span class="eyebrow">CU20 · Administración</span>
+        <h1>Respaldos del tenant</h1>
+        <p class="page-subtitle">Crea respaldos manuales y consulta los archivos generados automáticamente.</p>
+      </div>
+      <button type="button" class="btn btn-secondary" (click)="cargar()" [disabled]="cargando()">
+        <i class="ri-refresh-line" [class.spin-icon]="cargando()"></i> Actualizar
+      </button>
+    </header>
+
+    @if (uso(); as u) {
+      <section class="usage-card" aria-label="Uso mensual de respaldos manuales">
+        <div class="usage-icon"><i class="ri-pie-chart-2-line"></i></div>
+        <div class="usage-content">
+          <span class="usage-label">Respaldos manuales de este mes</span>
+          <strong>{{ u.backups_mes_actual ?? 0 }} / {{ u.max_backups_manuales ?? '∞' }}</strong>
+        </div>
+        @if (restantesManual() !== null) {
+          <span class="usage-remaining" [class.limit-reached]="restantesManual() === 0">
+            {{ restantesManual() }} restante{{ restantesManual() === 1 ? '' : 's' }}
+          </span>
+        }
+      </section>
+    }
+
+    <section class="backup-section">
+      <div class="section-heading">
+        <div class="section-title-group">
+          <div class="section-icon manual"><i class="ri-hand-heart-line"></i></div>
+          <div>
+            <h2>Respaldos manuales</h2>
+            <p>Generados bajo demanda por un administrador del tenant.</p>
+          </div>
+        </div>
+        <button type="button" class="btn btn-accent" (click)="crear()" [disabled]="!puedeCrear()">
+          @if (creando()) {
+            <i class="ri-loader-4-line spin-icon"></i> Creando...
+          } @else {
+            <i class="ri-add-line"></i> Crear respaldo manual
+          }
+        </button>
+      </div>
+
+      <div class="card table-card">
+        <div class="table-responsive">
+          <table class="table-custom backup-table">
+            <thead>
+              <tr>
+                <th>Fecha y hora</th>
+                <th>Nombre</th>
+                <th class="text-right">Descargar</th>
+                <th class="text-right">Restaurar</th>
+              </tr>
+            </thead>
+            <tbody>
+              @if (cargando()) {
+                <tr><td colspan="4" class="state-cell"><i class="ri-loader-4-line spin-icon"></i> Cargando respaldos manuales...</td></tr>
+              } @else if (manuales().length === 0) {
+                <tr><td colspan="4" class="state-cell empty"><i class="ri-folder-open-line"></i> Todavía no hay respaldos manuales.</td></tr>
+              } @else {
+                @for (backup of manuales(); track backup.id) {
+                  <tr>
+                    <td>
+                      <div class="date-cell">
+                        <i class="ri-calendar-line"></i>
+                        <span>{{ backup.fecha_inicio | date:'dd/MM/yyyy HH:mm:ss' }}</span>
+                      </div>
+                    </td>
+                    <td>
+                      <div class="file-cell">
+                        <span class="file-icon"><i class="ri-file-zip-line"></i></span>
+                        <div>
+                          <strong>{{ nombreArchivo(backup) }}</strong>
+                          <span>{{ backup.tamano_bytes ? (backup.tamano_bytes | number) + ' bytes' : 'Archivo en proceso' }}</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td class="text-right actions-cell">
+                      <button type="button" class="btn btn-secondary btn-sm" (click)="descargar(backup)" [disabled]="backup.estado !== 'COMPLETADO' || descargandoId() !== null">
+                        @if (descargandoId() === backup.id) {
+                          <i class="ri-loader-4-line spin-icon"></i>
+                        } @else {
+                          <i class="ri-download-2-line"></i>
+                        }
+                        Descargar
+                      </button>
+                    </td>
+                    <td class="text-right actions-cell">
+                      <button type="button" class="btn btn-secondary btn-sm restore-button" (click)="abrirRestauracion(backup)" [disabled]="!puedeRestaurar() || backup.estado !== 'COMPLETADO'" [title]="puedeRestaurar() ? 'Restaurar este respaldo' : 'Tu plan no permite restauraciones'">
+                        <i class="ri-refresh-line"></i>
+                        Restaurar
+                      </button>
+                    </td>
+                  </tr>
+                }
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="backup-section">
+      <div class="section-heading">
+        <div class="section-title-group">
+          <div class="section-icon automatic"><i class="ri-refresh-line"></i></div>
+          <div>
+            <h2>Respaldos automáticos</h2>
+            <p>Generados según la frecuencia configurada en el plan del tenant.</p>
+          </div>
+        </div>
+        <span class="count-badge">{{ automaticos().length }} respaldos</span>
+      </div>
+
+      <div class="card table-card">
+        <div class="table-responsive">
+          <table class="table-custom backup-table">
+            <thead>
+              <tr>
+                <th>Fecha y hora</th>
+                <th>Nombre</th>
+                <th class="text-right">Descargar</th>
+                <th class="text-right">Restaurar</th>
+              </tr>
+            </thead>
+            <tbody>
+              @if (cargando()) {
+                <tr><td colspan="4" class="state-cell"><i class="ri-loader-4-line spin-icon"></i> Cargando respaldos automáticos...</td></tr>
+              } @else if (automaticos().length === 0) {
+                <tr><td colspan="4" class="state-cell empty"><i class="ri-folder-open-line"></i> Todavía no hay respaldos automáticos.</td></tr>
+              } @else {
+                @for (backup of automaticos(); track backup.id) {
+                  <tr>
+                    <td>
+                      <div class="date-cell">
+                        <i class="ri-calendar-line"></i>
+                        <span>{{ backup.fecha_inicio | date:'dd/MM/yyyy HH:mm:ss' }}</span>
+                      </div>
+                    </td>
+                    <td>
+                      <div class="file-cell">
+                        <span class="file-icon"><i class="ri-file-zip-line"></i></span>
+                        <div>
+                          <strong>{{ nombreArchivo(backup) }}</strong>
+                          <span>{{ backup.tamano_bytes ? (backup.tamano_bytes | number) + ' bytes' : 'Archivo en proceso' }}</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td class="text-right actions-cell">
+                      <button type="button" class="btn btn-secondary btn-sm" (click)="descargar(backup)" [disabled]="backup.estado !== 'COMPLETADO' || descargandoId() !== null">
+                        @if (descargandoId() === backup.id) {
+                          <i class="ri-loader-4-line spin-icon"></i>
+                        } @else {
+                          <i class="ri-download-2-line"></i>
+                        }
+                        Descargar
+                      </button>
+                    </td>
+                    <td class="text-right actions-cell">
+                      <button type="button" class="btn btn-secondary btn-sm restore-button" (click)="abrirRestauracion(backup)" [disabled]="!puedeRestaurar() || backup.estado !== 'COMPLETADO'" [title]="puedeRestaurar() ? 'Restaurar este respaldo' : 'Tu plan no permite restauraciones'">
+                        <i class="ri-refresh-line"></i>
+                        Restaurar
+                      </button>
+                    </td>
+                  </tr>
+                }
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    @if (restauraciones().length) {
+      <section class="card history-card">
+        <div class="history-heading">
+          <h2>Restauraciones recientes</h2>
+          <span class="count-badge">{{ restauraciones().length }}</span>
+        </div>
+        <div class="table-responsive">
+          <table class="table-custom backup-table">
+            <thead><tr><th>Fecha y hora</th><th>Nombre</th><th>Estado</th></tr></thead>
+            <tbody>
+              @for (restauracion of restauraciones(); track restauracion.id) {
+                <tr>
+                  <td>{{ restauracion.fecha_solicitud | date:'dd/MM/yyyy HH:mm:ss' }}</td>
+                  <td>{{ restauracion.motivo || 'Sin motivo registrado' }}</td>
+                  <td><span class="badge" [ngClass]="(restauracion.estado | statusBadge).class">{{ (restauracion.estado | statusBadge).label }}</span></td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </section>
+    }
+  </div>
+</app-plan-feature-lock>
+
+@if (seleccion; as backupSeleccionado) {
+  <div class="dialog-backdrop" (click)="cerrarRestauracion()">
+    <section class="restore-dialog" role="dialog" aria-modal="true" aria-labelledby="restore-title" (click)="$event.stopPropagation()">
+      <div class="restore-icon"><i class="ri-refresh-line"></i></div>
+      <h2 id="restore-title">Restaurar respaldo</h2>
+      <p>La restauración puede reemplazar los datos actuales con el contenido de {{ nombreArchivo(backupSeleccionado) }}.</p>
+      <label for="motivo-restauracion">Motivo (mínimo 10 caracteres)</label>
+      <textarea id="motivo-restauracion" rows="3" [(ngModel)]="motivo" placeholder="Describe el motivo de la restauración"></textarea>
+      <label for="confirmacion-restauracion">Escribe <strong>RESTAURAR</strong> para confirmar</label>
+      <input id="confirmacion-restauracion" type="text" [(ngModel)]="textoConfirmacion" placeholder="RESTAURAR" autocomplete="off">
+      <div class="dialog-actions">
+        <button type="button" class="btn btn-secondary" (click)="cerrarRestauracion()">Cancelar</button>
+        <button type="button" class="btn btn-accent" (click)="restaurar()" [disabled]="!puedeConfirmar()">
+          @if (restaurando()) { <i class="ri-loader-4-line spin-icon"></i> }
+          Confirmar restauración
+        </button>
+      </div>
+    </section>
+  </div>
+}

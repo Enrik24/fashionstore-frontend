@@ -46,7 +46,8 @@ export class DeviceService {
     return this.http.post<DispositivoSincronizacion>(`${this.API_URL}/dispositivos`, datos).pipe(
       catchError((error) => {
         const detalle = String(error?.error?.detail ?? '');
-        const revocado = /revocado/i.test(detalle);
+        const codigo = String((error?.error as any)?.codigo ?? '');
+        const revocado = /revocado/i.test(detalle) || /revocado/i.test(codigo) || String(error?.status) === '403';
         if (!revocado) return throwError(() => error);
 
         // RN-019: el UUID anterior quedó revocado; se estrena uno nuevo.
@@ -82,12 +83,33 @@ export class DeviceService {
 
   /** Comprueba contra el backend si el dispositivo local sigue autorizado. */
   sincronizarEstado(): Observable<EstadoSesionOffline> {
+    // `/offline/sesion/estado` exige token online. Sin él se devuelve un
+    // estado local optimista para no provocar un 403 mientras se opera offline.
+    if (!this.storage.getAccessToken()) {
+      return of({
+        usuario_id: 0,
+        tenant_id: this.storage.getTenantActivo<{ id: number }>()?.id ?? 0,
+        dispositivo_id: this.obtenerDispositivoId(),
+        pin_configurado: this.storage.getPinConfigurado(),
+        dispositivo_activo: true,
+        intentos_restantes: environment.offlinePinMaxIntentos,
+        max_horas_sesion_offline: 0,
+        ultima_conexion: null,
+        ultima_descarga: null
+      });
+    }
+
     const headers = new HttpHeaders().set('X-Device-ID', this.obtenerDispositivoId());
     return this.http
       .get<EstadoSesionOffline>(`${this.API_URL}/sesion/estado`, { headers })
       .pipe(
         switchMap((estado) => {
-          if (estado.dispositivo_activo) return of(estado);
+          // Si el backend no conoce el UUID (por ejemplo, una base recreada o
+          // un entorno distinto), el dispositivo llega como "inactivo" pero no
+          // revocado. No se deben borrar los datos locales ni el PIN: solo se
+          // purga cuando el backend confirma el dispositivo y está inactivo.
+          const dispositivoConocido = !!estado.dispositivo_id;
+          if (!dispositivoConocido || estado.dispositivo_activo) return of(estado);
           return this.borrarDatosLocalesDelDispositivo().pipe(map(() => estado));
         })
       );

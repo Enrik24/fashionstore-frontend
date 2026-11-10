@@ -69,7 +69,19 @@ export class AuthService {
     // If token exists, load fresh profile
     if (this.storage.getAccessToken()) {
       this.getProfile().subscribe({
-        error: () => this.logout(false)
+        error: (err) => {
+          // [EXAMEN-2] Sin red (status 0) o error del servidor: no cerrar la
+          // sesión; el usuario debe poder seguir operando con su PIN offline.
+          if (err?.status !== 401 && err?.status !== 403) return;
+
+          // Token inválido/expirado en el arranque: se limpia solo el contexto
+          // online. El PIN y los datos offline se conservan para poder entrar
+          // por /offline/acceso (CU17).
+          this.storage.clearAuth();
+          this.tokenSignal.set(null);
+          this.currentUserSignal.set(null);
+          this.superAdminSignal.set(false);
+        }
       });
     }
   }
@@ -263,6 +275,10 @@ export class AuthService {
 
     if (response.tenant) {
       this.storage.setTenantActivo(response.tenant);
+      // ✅ FIX E1: sincronizar signal para que tenantOperativoGuard vea estado OPERATIVO desde el login.
+      if ((response.tenant as any).estado) {
+        this.tenantContext.actualizarTenant(response.tenant as any);
+      }
     }
     if (response.suscripcion) {
       this.tenantContext.suscripcion.set({

@@ -40,8 +40,8 @@ import { SectionTitleComponent } from '../../../../shared/components/section-tit
         <div class="estado-grid">
           <div class="estado-item card">
             <span class="estado-label"><i class="ri-key-2-line"></i> PIN</span>
-            <strong [class.ok]="e.pin_configurado" [class.no]="!e.pin_configurado">
-              {{ e.pin_configurado ? 'Configurado' : 'Sin configurar' }}
+            <strong [class.ok]="pinConfigurado()" [class.no]="!pinConfigurado()">
+              {{ pinConfigurado() ? 'Configurado' : 'Sin configurar' }}
             </strong>
           </div>
           <div class="estado-item card">
@@ -349,7 +349,9 @@ export class OfflineSecurityComponent implements OnInit {
     this.offlineSession.estadoSesion().subscribe({
       next: (estado) => {
         this.estado.set(estado);
-        this.pinConfigurado.set(estado.pin_configurado);
+        // No sobreescribir el flag local (IndexedDB) con el del backend:
+        // offline_pin_hash en BD no significa PIN guardado en este dispositivo.
+        // pinConfigurado() sigue siendo local (OfflineSessionService).
       },
       error: () => undefined
     });

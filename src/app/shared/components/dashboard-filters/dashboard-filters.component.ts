@@ -22,12 +22,19 @@ import { Sucursal } from '../../../core/models/branch.model';
           <input type="date" class="form-control" [ngModel]="value().fechaFin" (ngModelChange)="patch({ fechaFin: $event })" aria-label="Fecha fin" />
         </div>
       }
-      <select class="form-control" [ngModel]="value().sucursalId" (ngModelChange)="patch({ sucursalId: $event || undefined })" aria-label="Sucursal">
-        <option [ngValue]="undefined">Todas las sucursales</option>
-        @for (s of sucursales(); track s.id) {
-          <option [ngValue]="s.id">{{ s.nombre }}</option>
-        }
-      </select>
+      @if (sucursalFija()) {
+        <select class="form-control" [ngModel]="sucursalFija()" [disabled]="true" aria-label="Sucursal asignada"
+                title="Como Encargado solo consultás los indicadores de tu sucursal asignada">
+          <option [ngValue]="sucursalFija()">Mi sucursal: {{ nombreSucursalFija() }}</option>
+        </select>
+      } @else {
+        <select class="form-control" [ngModel]="value().sucursalId" (ngModelChange)="patch({ sucursalId: $event || undefined })" aria-label="Sucursal">
+          <option [ngValue]="undefined">Todas las sucursales</option>
+          @for (s of sucursales(); track s.id) {
+            <option [ngValue]="s.id">{{ s.nombre }}</option>
+          }
+        </select>
+      }
       <label class="switch"><input type="checkbox" [ngModel]="value().comparar" (ngModelChange)="patch({ comparar: $event })" /> Comparar con período anterior</label>
       <span class="range-label">{{ value().fechaInicio }} → {{ value().fechaFin }}</span>
     </div>
@@ -46,11 +53,20 @@ export class DashboardFiltersComponent {
   readonly value = input.required<DashboardFilters>();
   readonly sucursales = input<Sucursal[]>([]);
   readonly changed = output<DashboardFilters>();
+  /** [EXAMEN-2] Si el usuario es Encargado, el panel fija/deshabilita su sucursal. */
+  readonly sucursalFija = input<number | null>(null);
+
   readonly presets: { label: string; value: RangePreset }[] = [
     { label: 'Hoy', value: 'hoy' }, { label: '7 días', value: '7d' }, { label: '30 días', value: '30d' },
     { label: 'Mes', value: 'mes' }, { label: 'Trimestre', value: 'trimestre' }, { label: 'Año', value: 'anio' },
     { label: 'Personalizado', value: 'custom' }
   ];
+
+  nombreSucursalFija(): string {
+    const id = this.sucursalFija();
+    if (id === null) return '';
+    return this.sucursales().find(s => s.id === id)?.nombre ?? `Sucursal #${id}`;
+  }
 
   setPreset(preset: RangePreset): void {
     const v = { ...this.value(), preset };

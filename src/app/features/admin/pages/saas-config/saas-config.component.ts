@@ -401,7 +401,7 @@ export class SaasConfigComponent implements OnInit {
       next: (sucursales) => this.sucursales.set(sucursales),
       error: () => undefined
     });
-    this.userApi.getUsers(0, 500).subscribe({
+    this.userApi.getUsers(0, 100).subscribe({
       next: (usuarios) => this.usuarios.set(usuarios.length),
       error: () => undefined
     });

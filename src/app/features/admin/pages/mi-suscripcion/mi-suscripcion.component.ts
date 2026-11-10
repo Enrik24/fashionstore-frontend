@@ -397,7 +397,7 @@ export class MiSuscripcionComponent implements OnInit {
       funcionalidades: this.saasApi.obtenerFuncionalidadesPlan().pipe(catchError(() => of(null))),
       pagos: this.saasApi.listarPagosSuscripcion().pipe(catchError(() => of({ total: 0, pagos: [] } as HistorialPagos))),
       sucursales: this.branchApi.getBranches(0, 500).pipe(catchError(() => of([]))),
-      usuarios: this.userApi.getUsers(0, 500).pipe(catchError(() => of([]))),
+      usuarios: this.userApi.getUsers(0, 100).pipe(catchError(() => of([]))),
       productos: this.catalogApi.getProducts(0, 500).pipe(catchError(() => of([])))
     }).subscribe({
       next: ({ suscripcion, funcionalidades, pagos, sucursales, usuarios, productos }) => {

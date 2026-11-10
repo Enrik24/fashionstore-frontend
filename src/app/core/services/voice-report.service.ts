@@ -1,5 +1,5 @@
 
-import { Injectable, signal } from '@angular/core';
+import { Injectable, NgZone, inject, signal } from '@angular/core';
 
 export type VoiceErrorCode = 'unsupported' | 'not-allowed' | 'no-speech' | 'network' | 'language' | 'busy' | 'unknown';
 
@@ -20,6 +20,8 @@ export interface VoiceDictadoHandlers {
 
 @Injectable({ providedIn: 'root' })
 export class VoiceReportService {
+  /** [UX-VOZ] Necesaria para re-renderizar: la Web Speech API notifica fuera de NgZone. */
+  private zone = inject(NgZone);
   readonly isRecording = signal(false);
   readonly isProcessing = signal(false);
   readonly interimText = signal('');
@@ -89,6 +91,14 @@ export class VoiceReportService {
   private tryLang(SR: any, queue: string[], timeoutMs = DEFAULT_TIMEOUT_MS): void {
     const lang = queue[0];
     console.log('[VOZ] tryLang() -> intentando idioma:', lang, '| cola:', queue);
+    // Los eventos del reconocimiento (onresult/onerror/onend) llegan fuera de
+    // la zona de Angular; ejecutamos la creación y sus callbacks dentro de
+    // zone.run para que las señales isRecording/isProcessing/interimText
+    // disparen change detection y el botón refleje el estado en vivo.
+    this.zone.run(() => this._crearReconocedor(SR, queue, lang, timeoutMs));
+  }
+
+  private _crearReconocedor(SR: any, queue: string[], lang: string, timeoutMs = DEFAULT_TIMEOUT_MS): void {
     this.rec = new SR();
     this.rec.lang = lang;
     this.rec.interimResults = true;
@@ -117,7 +127,7 @@ export class VoiceReportService {
       console.log('[VOZ] onaudioend -> captura de audio del micrófono finalizada');
     };
 
-    this.rec.onresult = (e: any) => {
+    this.rec.onresult = (e: any) => this.zone.run(() => {
       console.log('[VOZ] onresult -> evento:', e);
       let interim = '';
       let final = '';
@@ -145,9 +155,9 @@ export class VoiceReportService {
         console.log('[VOZ] onresult -> texto final confirmado:', final.trim());
         this.deliver(final.trim());
       }
-    };
+    });
 
-    this.rec.onerror = (e: any) => {
+    this.rec.onerror = (e: any) => this.zone.run(() => {
       const code: string = e?.error ?? 'unknown';
       console.log('[VOZ] onerror -> code:', code, '| lastInterim:', JSON.stringify(this.lastInterim), '| manualStop:', this.manualStop);
 
@@ -173,10 +183,10 @@ export class VoiceReportService {
       }
 
       this.fail(code);
-    };
+    });
 
-    this.rec.onend = () => {
-      console.log('[VOZ] onend -> fin de reconocimiento | lastInterim:', JSON.stringify(this.lastInterim), '| finalDelivered:', this.finalDelivered, '| manualStop:', this.manualStop);
+    this.rec.onend = () => this.zone.run(() => {
+      console.log('[VOZ] onend(zone) -> fin de reconocimiento | lastInterim:', JSON.stringify(this.lastInterim), '| finalDelivered:', this.finalDelivered, '| manualStop:', this.manualStop);
       this.clearTimer();
       if (this.stopGraceTimer) {
         clearTimeout(this.stopGraceTimer);
@@ -194,7 +204,7 @@ export class VoiceReportService {
       } else {
         this.fail('no-speech');
       }
-    };
+    });
 
     try {
       this.rec.start();
@@ -313,8 +323,18 @@ export class VoiceReportService {
   }
 
   // ===== [EXAMEN-2] CU10: entrada por voz reutilizando transcripción =====
-  solicitarPorVoz(onFinal: (texto: string) => void, onError?: (code: string, msg: string) => void, lang = 'es-BO'): void {
-    this.start(lang, { onFinal, onError: (c, m) => onError?.(c, m), onInterim: () => undefined, onBusy: () => onError?.('busy', 'Grabación en curso') }, 15000);
+  solicitarPorVoz(
+    onFinal: (texto: string) => void,
+    onError?: (code: string, msg: string) => void,
+    lang = 'es-BO',
+    onInterim?: (texto: string) => void,
+  ): void {
+    this.start(lang, {
+      onFinal,
+      onError: (c, m) => onError?.(c, m),
+      onInterim: (t) => onInterim?.(t),
+      onBusy: () => onError?.('busy', 'Grabación en curso'),
+    }, 15000);
   }
   stopVoice(): void { this.stop(); }
   transcribeAudio(audio: Blob): Promise<string> { return new Promise((resolve) => { void audio; resolve(this.interimText() || ''); }); }

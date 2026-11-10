@@ -47,7 +47,7 @@ import { TenantBadgeComponent } from '../../../shared/components/tenant-badge/te
             }
           </a>
 
-          <a routerLink="/branch/sales" routerLinkActive="active" class="sidebar-link" title="Ventas de la Sucursal (online y presenciales)">
+          <a routerLink="/branch/sales" routerLinkActive="active" class="sidebar-link" title="Ventas de la Sucursal (presenciales)">
             <i class="ri-shopping-bag-3-line"></i>
             @if (!isSidebarCollapsed()) {
               <span>Ventas</span>

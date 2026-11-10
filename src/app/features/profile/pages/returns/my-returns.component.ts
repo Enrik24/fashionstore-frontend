@@ -78,9 +78,19 @@ import { SolicitudDevolucion, EstadoSolicitudDevolucion } from '../../../../core
                     @if (solicitud.fecha_limite_cambio) {
                       <div><span class="detail-label">Cambio disponible hasta:</span><span class="detail-val">{{ solicitud.fecha_limite_cambio | date:'dd/MM/yyyy' }}</span></div>
                     }
-                    @if (solicitud.numero_reposicion || solicitud.nota_reposicion_url || solicitud.nota_devolucion_url) {
-                      <div><span class="detail-label">Nota:</span><span class="detail-val">{{ solicitud.numero_reposicion || 'Descargable' }}</span></div>
+                    @if (solicitud.numero_reposicion) {
+                      <div><span class="detail-label">N.º de reposición:</span><span class="detail-val">{{ solicitud.numero_reposicion }}</span></div>
                     }
+                    <div>
+                      <span class="detail-label">Nota PDF:</span>
+                      <button type="button" class="btn btn-outline btn-sm" [disabled]="descargandoNota() === solicitud.id" (click)="descargarNota(solicitud)">
+                        @if (descargandoNota() === solicitud.id) {
+                          <i class="ri-loader-4-line spin-icon"></i> Generando...
+                        } @else {
+                          <i class="ri-file-pdf-line"></i> @if (solicitud.tipo === 'REPOSICION') { Nota de reposición } @else { Nota de devolución }
+                        }
+                      </button>
+                    </div>
                     <div>
                       <span class="detail-label">Motivo:</span>
                       <span class="detail-val">{{ getMotivoLabel(solicitud.motivo) }}</span>
@@ -376,6 +386,32 @@ export class MyReturnsComponent implements OnInit {
       if (copia.has(id)) copia.delete(id);
       else copia.add(id);
       return copia;
+    });
+  }
+
+  /** [EXAMEN-2] CU13/CU18: el PDF de la nota se genera on-demand; no requiere URL preguardada. */
+  public descargandoNota = signal<number | null>(null);
+
+  descargarNota(solicitud: SolicitudDevolucion): void {
+    const esReposicion = solicitud.tipo === 'REPOSICION';
+    this.descargandoNota.set(solicitud.id);
+    (esReposicion
+      ? this.returnsApi.descargarNotaReposicion(solicitud.id)
+      : this.returnsApi.descargarNota(solicitud.id)
+    ).subscribe({
+      next: (blob) => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${esReposicion ? 'nota-reposicion' : 'nota-devolucion'}-${solicitud.id}.pdf`;
+        a.click();
+        URL.revokeObjectURL(url);
+        this.descargandoNota.set(null);
+      },
+      error: () => {
+        this.descargandoNota.set(null);
+        this.toast.error('No se pudo generar la nota en PDF.');
+      }
     });
   }
 

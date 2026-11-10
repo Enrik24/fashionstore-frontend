@@ -21,4 +21,10 @@ export interface Backup {
   error_detalle?: string | null;
 }
 export interface Restauracion { id: number; backup_id: number; estado: EstadoRestauracion; motivo: string; fecha_solicitud: string; fecha_fin?: string | null; }
-export interface UsoRespaldos { backups_mes_actual?: number; max_backups_manuales?: number | null; restantes?: number | null; ilimitado?: boolean; }
+export interface UsoRespaldos {
+  backups_mes_actual?: number;
+  max_backups_manuales?: number | null;
+  restantes_mes_actual?: number | null;
+  restantes?: number | null;
+  ilimitado?: boolean;
+}

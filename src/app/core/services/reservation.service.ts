@@ -103,14 +103,28 @@ export class ReservationService {
       { sucursalId: datos.sucursal_id }
     );
 
+    const detalleLineas: string[] = [];
+    let total = 0;
+    for (const detalle of datos.detalles) {
+      const variante = await this.catalog.obtenerVariante(detalle.variante_producto_id);
+      const producto = variante ? await this.catalog.obtenerProducto(variante.producto_id) : null;
+      const nombre = producto?.nombre ?? `variante ${detalle.variante_producto_id}`;
+      const talla = variante?.talla ?? 'Única';
+      const color = variante?.color ?? 'Sin color';
+      const precio = Number(variante?.precio_variante ?? variante?.precio ?? producto?.precio ?? 0);
+      const subtotal = precio * detalle.cantidad;
+      total += subtotal;
+      detalleLineas.push(
+        `${detalle.cantidad} x ${nombre} (${talla} · ${color}) - Bs. ${subtotal.toFixed(2)}`
+      );
+    }
+
     const comprobante = await this.documents.generarComprobanteTemporal({
       tipo: 'RESERVA',
-      total: 0,
+      total,
       sucursalId: datos.sucursal_id,
       clienteId: clienteId ?? datos.cliente_id ?? null,
-      detalle: datos.detalles.map((detalle) =>
-        `${detalle.cantidad} x variante ${detalle.variante_producto_id}`
-      ),
+      detalle: detalleLineas,
       leyenda: 'Reserva registrada localmente. Se confirmará al sincronizar con el servidor.'
     });
 
@@ -150,15 +164,33 @@ export class ReservationService {
     reserva: Reserva,
     detalle: string[] = []
   ): Promise<ComprobanteLocal> {
+    let lineas = detalle;
+    let total = 0;
+    if (lineas.length === 0) {
+      lineas = [];
+      for (const linea of reserva.detalles) {
+        const variante = await this.catalog.obtenerVariante(linea.variante_producto_id);
+        const producto = variante ? await this.catalog.obtenerProducto(variante.producto_id) : null;
+        const nombre = producto?.nombre ?? `variante ${linea.variante_producto_id}`;
+        const talla = variante?.talla ?? 'Única';
+        const color = variante?.color ?? 'Sin color';
+        const precio = Number(variante?.precio_variante ?? variante?.precio ?? producto?.precio ?? 0);
+        const subtotal = precio * linea.cantidad;
+        total += subtotal;
+        lineas.push(`${linea.cantidad} x ${nombre} (${talla} · ${color}) - Bs. ${subtotal.toFixed(2)}`);
+      }
+    } else {
+      // Si el caller pasó detalle pre-formateado, intenta extraer total no disponible: deja 0
+      // para no inventar un total. El flujo de crearReservaLocal ya pasa lineas con precio.
+      total = 0;
+    }
     return this.documents.generarComprobanteTemporal({
       tipo: 'RESERVA',
-      total: 0,
+      total,
       sucursalId: reserva.sucursal_id,
       clienteId: reserva.cliente_id,
       numeroTemporal: reserva.numero_reserva,
-      detalle: detalle.length > 0
-        ? detalle
-        : reserva.detalles.map((linea) => `${linea.cantidad} x variante ${linea.variante_producto_id}`)
+      detalle: lineas
     });
   }
 

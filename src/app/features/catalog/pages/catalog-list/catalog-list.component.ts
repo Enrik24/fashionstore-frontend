@@ -8,13 +8,16 @@ import { Producto, GeneroProducto } from '../../../../core/models/catalog.model'
 import { ProductoFilterParams, ProductoBusquedaResponse } from '../../../../core/models/public-catalog.model';
 import { ProductCardComponent } from '../../components/product-card/product-card.component';
 import { CatalogFiltersComponent } from '../../components/catalog-filters/catalog-filters.component';
+import { PromotionsBannerComponent } from '../../../../shared/components/promotions-banner/promotions-banner.component';
 
 @Component({
   selector: 'app-catalog-list',
   standalone: true,
-  imports: [CommonModule, FormsModule, ProductCardComponent, CatalogFiltersComponent],
+  imports: [CommonModule, FormsModule, ProductCardComponent, CatalogFiltersComponent, PromotionsBannerComponent],
   template: `
     <div class="catalog-page">
+      <!-- [EXAMEN-2] Banner de campaña promocional vigente (ej. Black Fashion November) -->
+      <app-promotions-banner />
       <!-- Hero Banner -->
       <div class="catalog-hero">
         <div class="container hero-content">

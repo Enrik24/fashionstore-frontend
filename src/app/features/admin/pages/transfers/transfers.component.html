@@ -1,0 +1,141 @@
+<section class="transfers-page">
+  <header class="page-head">
+    <div>
+      <span class="eyebrow"><i class="ri-arrow-left-right-line"></i> CU14 · Traspasos</span>
+      <h1>Traspasos entre sucursales</h1>
+      <p>Transfiere stock entre sucursales. El origen se descuenta y la mercancía queda en tránsito hasta ser recibida.</p>
+    </div>
+    <button type="button" class="btn btn-outline refresh-button" (click)="cargar()" [disabled]="cargando()"><i class="ri-refresh-line" [class.spin-icon]="cargando()"></i> Actualizar</button>
+  </header>
+
+  <section class="workflow-card card">
+    <div class="workflow-step"><span>1</span><div><strong>Selecciona el origen</strong><small>El stock se descontará aquí</small></div></div>
+    <i class="ri-arrow-right-line workflow-arrow"></i>
+    <div class="workflow-step"><span>2</span><div><strong>Indica el destino</strong><small>La sucursal recibirá el stock</small></div></div>
+    <i class="ri-arrow-right-line workflow-arrow"></i>
+    <div class="workflow-step"><span>3</span><div><strong>Agrega el producto</strong><small>Revisa variante y cantidad</small></div></div>
+  </section>
+
+  <div class="content-grid">
+    <section class="card form-card">
+      <div class="card-heading">
+        <div class="card-icon"><i class="ri-add-circle-line"></i></div>
+        <div><h2>Crear un traspaso</h2><p>Completa los datos para mover mercancía entre sucursales.</p></div>
+      </div>
+      <div class="route-grid">
+        <div class="form-group">
+          <label class="form-label" for="origen">Sucursal origen <span class="required">*</span></label>
+          <select id="origen" class="form-control" [(ngModel)]="origen" (ngModelChange)="onOrigenChange()">
+            <option [ngValue]="null">Selecciona una sucursal</option>
+            @for (s of sucursales(); track s.id) { <option [ngValue]="s.id">{{ s.nombre }}</option> }
+          </select>
+          <span class="form-hint">Solo se mostrará el stock disponible del origen.</span>
+        </div>
+        <div class="route-arrow"><i class="ri-arrow-right-line"></i></div>
+        <div class="form-group">
+          <label class="form-label" for="destino">Sucursal destino <span class="required">*</span></label>
+          <select id="destino" class="form-control" [(ngModel)]="destino">
+            <option [ngValue]="null">Selecciona una sucursal</option>
+            @for (s of sucursales(); track s.id) { <option [ngValue]="s.id" [disabled]="s.id === origen">{{ s.nombre }}</option> }
+          </select>
+          <span class="form-hint">Debe ser diferente de la sucursal origen.</span>
+        </div>
+      </div>
+      <div class="section-divider"><span>Producto a transferir</span></div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label" for="producto">Producto <span class="required">*</span></label>
+          <select id="producto" class="form-control" [(ngModel)]="productoId" (ngModelChange)="onProductoChange()">
+            <option [ngValue]="null">Selecciona un producto</option>
+            @for (p of productos(); track p.id) { <option [ngValue]="p.id">{{ p.nombre }} · {{ p.sku }}</option> }
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="variante">Variante <span class="required">*</span></label>
+          <select id="variante" class="form-control" [(ngModel)]="variante" [disabled]="!productoId">
+            <option [ngValue]="null">{{ productoId ? 'Selecciona una variante' : 'Primero elige un producto' }}</option>
+            @for (v of variantes(); track v.id) { <option [ngValue]="v.id">{{ v.talla?.valor || 'Única' }} · {{ v.color?.nombre || 'Sin color' }} · {{ v.sku_variante || v.id }}</option> }
+          </select>
+        </div>
+        <div class="form-group quantity-group">
+          <label class="form-label" for="cantidad">Cantidad <span class="required">*</span></label>
+          <input id="cantidad" class="form-control" type="number" [(ngModel)]="cantidad" min="1" />
+          <span class="form-hint">@if (cargandoStock()) { <i class="ri-loader-4-line spin-icon"></i> Consultando stock… } @else { Disponible en origen: <strong>{{ stockSeleccionado() }}</strong> unidades }</span>
+        </div>
+      </div>
+      @if (errorStock()) { <div class="notice notice-error"><i class="ri-error-warning-line"></i><span>{{ errorStock() }}</span></div> }
+      <div class="form-actions">
+        <button type="button" class="btn btn-accent" [disabled]="!origen || !destino || !variante || origen === destino || creando() || cargandoStock()" (click)="crear()">
+          @if (creando()) { <i class="ri-loader-4-line spin-icon"></i> Creando traspaso… } @else { <i class="ri-arrow-left-right-line"></i> Crear traspaso }
+        </button>
+        <span class="action-note"><i class="ri-information-line"></i> El stock se descuenta al confirmar.</span>
+      </div>
+    </section>
+
+    <aside class="card suggestions-card">
+      <div class="card-heading">
+        <div class="card-icon suggestion-icon"><i class="ri-lightbulb-line"></i></div>
+        <div><h2>Sugerencias por demanda</h2><p>Movimientos recomendados según el inventario.</p></div>
+      </div>
+      @if (cargandoSugerencias()) {
+        <div class="suggestion-state"><i class="ri-loader-4-line spin-icon"></i> Analizando inventario…</div>
+      } @else if (sugerencias().length === 0) {
+        <div class="suggestion-state"><i class="ri-checkbox-circle-line"></i> No hay sugerencias en este momento.</div>
+      } @else {
+        <div class="suggestion-list">
+          @for (s of sugerencias(); track s.variante_producto_id) {
+            <article class="suggestion-item">
+              <div class="suggestion-product"><span class="suggestion-product-icon"><i class="ri-shirt-line"></i></span><div><strong>Variante #{{ s.variante_producto_id }}</strong><small>{{ s.producto_nombre || 'Producto del catálogo' }}</small></div></div>
+              <div class="suggestion-route"><span>{{ nombreSucursal(s.sucursal_origen_id ?? 0) }}</span><i class="ri-arrow-right-line"></i><span>{{ nombreSucursal(s.sucursal_destino_id ?? 0) }}</span></div>
+              <div class="suggestion-stats"><span><small>Disponible</small><strong>{{ s.disponible_origen ?? s.stock_origen ?? 0 }}</strong></span><span><small>Sugerido</small><strong>{{ s.cantidad_sugerida ?? 0 }}</strong></span><span><small>Demanda</small><strong>{{ s.demanda_destino ?? s.demanda ?? 0 }}</strong></span></div>
+            </article>
+          }
+        </div>
+      }
+    </aside>
+  </div>
+
+  <section class="card history-card">
+    <div class="history-header">
+      <div class="card-heading">
+        <div class="card-icon"><i class="ri-history-line"></i></div>
+        <div><h2>Historial de traspasos</h2><p>Consulta el recorrido y las líneas de cada movimiento.</p></div>
+      </div>
+      <div class="history-filter"><label for="filtro-traspaso">Estado</label><select id="filtro-traspaso" class="form-control" [(ngModel)]="filtroEstado" (ngModelChange)="cargar()"><option value="">Todos</option><option value="EN_TRANSITO">En tránsito</option><option value="RECIBIDO">Recibido</option><option value="RECHAZADO_PARCIAL">Rechazo parcial</option><option value="CANCELADO">Cancelado</option></select></div>
+    </div>
+    @if (cargando()) {
+      <div class="state-message"><i class="ri-loader-4-line spin-icon"></i><span>Cargando traspasos…</span></div>
+    } @else if (lista().length === 0) {
+      <div class="state-message state-empty"><div class="empty-icon"><i class="ri-arrow-left-right-line"></i></div><strong>No hay traspasos para mostrar</strong><span>Crea el primer movimiento usando el formulario o cambia el filtro de estado.</span></div>
+    } @else {
+      <div class="transfer-list">
+        @for (t of lista(); track t.id) {
+          <article class="transfer-card">
+            <div class="transfer-main">
+              <div class="transfer-identity"><span class="transfer-icon"><i class="ri-arrow-left-right-line"></i></span><div><strong>{{ t.numero }}</strong><span>{{ t.fecha_envio | date:'dd/MM/yyyy HH:mm' }}</span></div></div>
+              <div class="transfer-route"><span><small>Origen</small><strong>{{ nombreSucursal(t.sucursal_origen_id) }}</strong></span><i class="ri-arrow-right-line"></i><span><small>Destino</small><strong>{{ nombreSucursal(t.sucursal_destino_id) }}</strong></span></div>
+              <div class="transfer-status"><span class="badge" [ngClass]="(t.estado | statusBadge).class">{{ (t.estado | statusBadge).label }}</span><small>{{ totalUnidades(t) }} unidades</small></div>
+              <button type="button" class="btn btn-outline btn-sm" (click)="historial(t)" [disabled]="!tieneHistorial(t)"><i class="ri-history-line"></i> Ver historial</button>
+            </div>
+            <div class="transfer-lines">
+              @for (d of t.detalles || []; track $index) {
+                <div class="transfer-line"><div><strong>{{ d.producto || productoDeDetalle(d.producto_id) }}</strong><span>Variante #{{ d.variante_producto_id }} · {{ d.cantidad }} enviadas</span></div><div class="line-metrics"><span><small>Recibidas</small><strong>{{ d.cantidad_recibida ?? 0 }}</strong></span><span><small>Merma</small><strong>{{ d.cantidad_merma ?? 0 }}</strong></span><span><small>Pendientes</small><strong>{{ d.cantidad_pendiente ?? (d.cantidad - (d.cantidad_recibida ?? 0) - (d.cantidad_merma ?? 0)) }}</strong></span></div></div>
+              }
+            </div>
+            @if (historialSel() === t.id) {
+              <div class="history-panel">
+                @if (cargandoHistorial()) { <span><i class="ri-loader-4-line spin-icon"></i> Cargando historial del producto…</span> }
+                @else {
+                  @if (historialProducto(); as h) {
+                    <div class="history-panel-header"><strong>Historial de {{ h.producto }}</strong><span>{{ h.total_movimientos }} movimientos</span></div>
+                    @for (movimiento of h.movimientos; track movimiento.traspaso_id) { <div class="history-movement"><span>{{ movimiento.numero }}</span><span>{{ nombreSucursal(movimiento.sucursal_origen_id) }} → {{ nombreSucursal(movimiento.sucursal_destino_id) }}</span><span>{{ movimiento.cantidad }} uds.</span><span class="badge" [ngClass]="(movimiento.estado | statusBadge).class">{{ (movimiento.estado | statusBadge).label }}</span></div> }
+                  }
+                }
+              </div>
+            }
+          </article>
+        }
+      </div>
+    }
+  </section>
+</section>

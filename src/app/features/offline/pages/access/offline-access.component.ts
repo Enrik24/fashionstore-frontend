@@ -274,9 +274,16 @@ export class OfflineAccessComponent implements OnInit {
     this.offlineSession.estadoSesion().subscribe({
       next: (estado) => {
         this.estado.set(estado);
-        this.pinConfigurado.set(estado.pin_configurado);
+        // El PIN que permite operar sin red es el guardado en ESTE dispositivo
+        // (hash en IndexedDB). `pin_configurado` del backend solo indica que el
+        // usuario tiene PIN en BD, no que exista en este navegador, así que no
+        // se usa para decidir si se muestra el teclado.
+        const dispositivoConocido = !!estado.dispositivo_id;
         this.intentosRestantes.set(estado.intentos_restantes);
-        this.bloqueado.set(!estado.dispositivo_activo || estado.intentos_restantes <= 0);
+        this.bloqueado.set(
+          this.pinConfigurado() &&
+          ((dispositivoConocido && !estado.dispositivo_activo) || estado.intentos_restantes <= 0)
+        );
       },
       error: () => undefined
     });

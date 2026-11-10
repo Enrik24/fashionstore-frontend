@@ -112,8 +112,8 @@ interface LineaReserva {
                       [class.selected]="productoSeleccionado()?.id === producto.id"
                       (click)="seleccionarProducto(producto)"
                     >
-                      @if (producto.imagenes[0]) {
-                        <img [src]="producto.imagenes[0]" [alt]="producto.nombre" />
+                      @if (imagenProducto(producto); as src) {
+                        <img [src]="src" [alt]="producto.nombre" loading="lazy" (error)="marcarImagenError(producto.id)" />
                       } @else {
                         <span class="producto-placeholder"><i class="ri-t-shirt-2-line"></i></span>
                       }
@@ -177,7 +177,7 @@ interface LineaReserva {
 
               <div class="form-group">
                 <label class="form-label">Sucursal <span class="required">*</span></label>
-                <select class="form-control" [(ngModel)]="sucursalId">
+                <select class="form-control" [(ngModel)]="sucursalId" (ngModelChange)="onSucursalChange()">
                   <option [ngValue]="null">-- Selecciona una sucursal --</option>
                   @for (sucursal of sucursales(); track sucursal.id) {
                     <option [ngValue]="sucursal.id">{{ sucursal.nombre }}</option>
@@ -351,6 +351,18 @@ export class OfflineReservationComponent implements OnInit {
   error = signal<string | null>(null);
   comprobante = signal<ComprobanteLocal | null>(null);
   creada = signal<ReservaLocalCreada | null>(null);
+  imagenesFallidas = signal<Set<number>>(new Set());
+
+  imagenProducto(producto: ProductoOffline): string | null {
+    if (this.imagenesFallidas().has(producto.id)) return null;
+    const raw = producto.imagenes as unknown;
+    const url = Array.isArray(raw) ? raw[0] : undefined;
+    return typeof url === 'string' && url.trim() ? url : null;
+  }
+
+  marcarImagenError(productoId: number): void {
+    this.imagenesFallidas.update((s) => new Set(s).add(productoId));
+  }
 
   get hoy(): string {
     return new Date().toISOString().slice(0, 10);
@@ -396,12 +408,19 @@ export class OfflineReservationComponent implements OnInit {
       const variantes = await this.catalog.variantesDeProducto(producto.id);
       const conStock = [];
       for (const variante of variantes) {
-        conStock.push({ variante, stock: await this.catalog.stockLocal(variante.id) });
+        // Usa la sucursal elegida en la reserva (fallback al stock local descargado)
+        const sucursal = this.sucursalId ?? undefined;
+        conStock.push({ variante, stock: await this.catalog.stockLocal(variante.id, sucursal) });
       }
       this.variantes.set(conStock);
     } finally {
       this.cargandoVariantes.set(false);
     }
+  }
+
+  async onSucursalChange(): Promise<void> {
+    const producto = this.productoSeleccionado();
+    if (producto) await this.seleccionarProducto(producto);
   }
 
   seleccionarVariante(variante: VarianteOffline, stock: StockOffline | null): void {
@@ -540,8 +559,8 @@ export class OfflineReservationComponent implements OnInit {
     }
   }
 
-  descargar(comprobante: ComprobanteLocal): void {
-    if (!this.documents.descargar(comprobante)) {
+  async descargar(comprobante: ComprobanteLocal): Promise<void> {
+    if (!(await this.documents.descargar(comprobante))) {
       this.toast.warning('No se pudo generar el archivo del comprobante.', 'Descarga no disponible');
     }
   }
@@ -562,7 +581,17 @@ export class OfflineReservationComponent implements OnInit {
       const activas = sucursales.filter((sucursal) => sucursal.estado === 'ACTIVO');
       this.sucursales.set(activas);
       this.sucursalId = this.auth.currentUserSignal()?.sucursal_id ?? activas[0]?.id ?? null;
+      // [EXAMEN-2] CU06: se guarda para poder reservar cuando no haya red.
+      await this.catalog.guardarSucursalesCache(activas);
     } catch {
+      // Sin red se usa el cache guardado durante la descarga offline.
+      const cacheadas = (await this.catalog.obtenerSucursalesCache())
+        .filter((sucursal) => sucursal.estado === 'ACTIVO');
+      if (cacheadas.length > 0) {
+        this.sucursales.set(cacheadas);
+        this.sucursalId = this.auth.currentUserSignal()?.sucursal_id ?? cacheadas[0]?.id ?? null;
+        return;
+      }
       const sucursalId = this.auth.currentUserSignal()?.sucursal_id ?? null;
       this.sucursales.set(sucursalId ? [{ id: sucursalId, nombre: `Sucursal ${sucursalId}` } as Sucursal] : []);
       this.sucursalId = sucursalId;

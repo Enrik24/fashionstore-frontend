@@ -205,15 +205,25 @@ import { CartOfflinePanelComponent } from '../../components/cart-offline-panel/c
                   </div>
 
                   @if (cartService.discountSignal() > 0) {
-                    <div class="summary-row discount-row">
-                      <span class="row-label">
-                        Descuento aplicado
-                        @if (cartService.cartSignal()?.cupon) {
+                    @if (cartService.promoActiva(); as promo) {
+                      <!-- [EXAMEN-2] Campaña automática (ej. Black Fashion November 15%) -->
+                      <div class="summary-row discount-row">
+                        <span class="row-label">
+                          <i class="ri-fire-line promo-fire"></i> {{ promo.nombre }}
+                          (-{{ promo.valor }}%)
+                        </span>
+                        <span class="row-val">- Bs. {{ cartService.promoDiscountSignal() | number:'1.2-2' }}</span>
+                      </div>
+                    }
+                    @if (cartService.cartSignal()?.cupon) {
+                      <div class="summary-row discount-row">
+                        <span class="row-label">
+                          Descuento cupón
                           <span class="coupon-code">({{ cartService.cartSignal()?.cupon?.codigo }})</span>
-                        }
-                      </span>
-                      <span class="row-val">- Bs. {{ cartService.discountSignal() | number:'1.2-2' }}</span>
-                    </div>
+                        </span>
+                        <span class="row-val">- Bs. {{ cartService.cuponDiscountSignal() | number:'1.2-2' }}</span>
+                      </div>
+                    }
                   }
 
                   <div class="summary-row">
@@ -553,6 +563,12 @@ import { CartOfflinePanelComponent } from '../../components/cart-offline-panel/c
     .discount-row {
       color: var(--success);
       font-weight: 600;
+    }
+
+    /* [EXAMEN-2] Campaña automática: acento de marca en la fila del resumen */
+    .promo-fire {
+      color: var(--accent, #e11d48);
+      margin-right: 0.25rem;
     }
 
     .free-shipping {

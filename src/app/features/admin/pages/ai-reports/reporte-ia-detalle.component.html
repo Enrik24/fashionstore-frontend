@@ -1,0 +1,175 @@
+<section class="report-detail-page">
+  <a class="back-link" routerLink="/admin/reportes-ia">
+    <i class="ri-arrow-left-line"></i> Volver a reportes IA
+  </a>
+
+  <header class="page-head">
+    <div>
+      <span class="eyebrow"><i class="ri-file-chart-line"></i> CU10/CU11 · Detalle</span>
+      <h1>Detalle del reporte</h1>
+      <p>Revisa los filtros, los resultados y exporta la información cuando la necesites.</p>
+    </div>
+  </header>
+
+  @if (cargando()) {
+    <section class="card state-message">
+      <i class="ri-loader-4-line spin-icon"></i>
+      <span>Cargando detalle del reporte…</span>
+    </section>
+  } @else if (error()) {
+    <section class="card state-message state-error">
+      <div class="empty-icon"><i class="ri-error-warning-line"></i></div>
+      <strong>No pudimos abrir el reporte</strong>
+      <span>{{ error() }}</span>
+      <a class="btn btn-outline" routerLink="/admin/reportes-ia">Volver al historial</a>
+    </section>
+  } @else {
+    @if (detalle(); as reporte) {
+    <section class="card summary-card">
+      <div class="summary-icon"><i class="ri-file-chart-line"></i></div>
+      <div class="summary-content">
+        <div class="summary-title-row">
+          <h2>{{ reporte.prompt_original || 'Reporte generado' }}</h2>
+          <span class="badge" [ngClass]="(reporte.estado | statusBadge).class">
+            {{ (reporte.estado | statusBadge).label }}
+          </span>
+        </div>
+        <div class="metadata-list">
+          <span><i class="ri-hash-line"></i> Reporte #{{ reporte.id }}</span>
+          <span><i class="ri-time-line"></i> Generado en {{ reporte.tiempo_ms ?? 0 }} ms</span>
+          @if (reporte.fecha_ejecucion) {
+            <span><i class="ri-calendar-line"></i> {{ reporte.fecha_ejecucion | date:'dd/MM/yyyy HH:mm:ss' }}</span>
+          }
+        </div>
+      </div>
+    </section>
+
+    @if (reporte.preguntas_aclaracion?.length) {
+      <div class="notice notice-warning">
+        <strong>Este reporte requiere una aclaración</strong>
+        @for (pregunta of reporte.preguntas_aclaracion; track pregunta) {
+          <p>{{ pregunta }}</p>
+        }
+      </div>
+    }
+
+    @if (reporte.error_detalle) {
+      <div class="notice notice-error">{{ reporte.error_detalle }}</div>
+    }
+
+    @if (filtros(reporte).length) {
+      <section class="card filters-card">
+        <div class="section-title">
+          <span class="section-icon"><i class="ri-filter-3-line"></i></span>
+          <div>
+            <h2>Filtros aplicados</h2>
+            <p>Condiciones utilizadas para consultar los datos.</p>
+          </div>
+        </div>
+        <div class="filter-list">
+          @for (filtro of filtros(reporte); track filtro.clave) {
+            <div class="filter-chip">
+              <span>{{ filtro.clave }}</span>
+              <strong>{{ filtro.valor }}</strong>
+            </div>
+          }
+        </div>
+      </section>
+    }
+
+    <section class="card results-card">
+      <div class="section-title results-title">
+        <span class="section-icon"><i class="ri-bar-chart-box-line"></i></span>
+        <div>
+          <h2>Resultados del reporte</h2>
+          @if (reporte.filas?.length) {
+            <p>{{ reporte.filas?.length }} {{ reporte.filas?.length === 1 ? 'registro encontrado' : 'registros encontrados' }}</p>
+          } @else {
+            <p>Consulta los datos obtenidos por el reporte.</p>
+          }
+        </div>
+      </div>
+
+      @if (reporte.filas?.length) {
+        <div class="table-responsive">
+          <table class="table-custom results-table">
+            <thead>
+              <tr>
+                @for (columna of reporte.columnas ?? []; track columna) {
+                  <th>{{ nombreLegible(columna) }}</th>
+                }
+              </tr>
+            </thead>
+            <tbody>
+              @for (fila of reporte.filas; track $index) {
+                <tr>
+                  @for (columna of reporte.columnas ?? []; track columna) {
+                    <td>{{ valorCelda(fila, columna) }}</td>
+                  }
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      } @else {
+        <div class="state-message state-empty">
+          <div class="empty-icon"><i class="ri-inbox-2-line"></i></div>
+          <strong>No hay resultados para mostrar</strong>
+          <span>El reporte se ejecutó, pero no encontró registros para los filtros indicados.</span>
+        </div>
+      }
+    </section>
+
+    <section class="card export-card">
+      <div class="export-copy">
+        <span class="section-icon"><i class="ri-download-2-line"></i></span>
+        <div>
+          <h2>Exportar reporte</h2>
+          <p>Descarga los resultados en el formato que necesites compartir.</p>
+        </div>
+      </div>
+      <div class="export-actions">
+        <button
+          type="button"
+          class="btn btn-accent"
+          [disabled]="!puedeExportar() || !!exportandoFormato()"
+          (click)="exportar('PDF')"
+        >
+          @if (exportandoFormato() === 'PDF') {
+            <i class="ri-loader-4-line spin-icon"></i> Preparando…
+          } @else {
+            <i class="ri-file-pdf-2-line"></i> PDF
+          }
+        </button>
+        <button
+          type="button"
+          class="btn btn-outline"
+          [disabled]="!puedeExportar() || !!exportandoFormato()"
+          (click)="exportar('EXCEL')"
+        >
+          @if (exportandoFormato() === 'EXCEL') {
+            <i class="ri-loader-4-line spin-icon"></i> Preparando…
+          } @else {
+            <i class="ri-file-excel-2-line"></i> Excel
+          }
+        </button>
+        <button
+          type="button"
+          class="btn btn-outline"
+          [disabled]="!puedeExportar() || !!exportandoFormato()"
+          (click)="exportar('HTML')"
+        >
+          @if (exportandoFormato() === 'HTML') {
+            <i class="ri-loader-4-line spin-icon"></i> Preparando…
+          } @else {
+            <i class="ri-code-line"></i> HTML
+          }
+        </button>
+      </div>
+      @if (!puedeExportar()) {
+        <p class="export-hint">La exportación estará disponible cuando el reporte se haya ejecutado correctamente.</p>
+      }
+    </section>
+    }
+  }
+</section>

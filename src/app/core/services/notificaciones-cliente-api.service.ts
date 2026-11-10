@@ -12,7 +12,8 @@ import { NotificacionCliente } from '../models/notificacion-cliente.model';
 export class NotificacionesClienteApiService {
   private http = inject(HttpClient);
   private readonly API_URL = `${environment.apiUrl}/notificaciones`;
-  misNotificaciones(filtros: { tipo?: string; leida?: boolean; skip?: number; limit?: number } = {}): Observable<NotificacionCliente[]> { let p = new HttpParams().set('skip', String(filtros.skip ?? 0)).set('limit', String(filtros.limit ?? 50)); if (filtros.tipo) p = p.set('tipo', filtros.tipo); if (filtros.leida !== undefined) p = p.set('leida', String(filtros.leida)); return this.http.get<NotificacionCliente[]>(`${this.API_URL}/mis-notificaciones`, { params: p }); }
+  /** El backend responde `{ "notificaciones": [...] }` ( contrarollado con la app móvil); se desempaqueta para exponer el array. */
+  misNotificaciones(filtros: { tipo?: string; leida?: boolean; skip?: number; limit?: number } = {}): Observable<NotificacionCliente[]> { let p = new HttpParams().set('skip', String(filtros.skip ?? 0)).set('limit', String(filtros.limit ?? 50)); if (filtros.tipo) p = p.set('tipo', filtros.tipo); if (filtros.leida !== undefined) p = p.set('leida', String(filtros.leida)); return this.http.get<{ notificaciones?: NotificacionCliente[] } | NotificacionCliente[]>(`${this.API_URL}/mis-notificaciones`, { params: p }).pipe(map((r) => (Array.isArray(r) ? r : (r?.notificaciones ?? [])))); }
   marcarLeida(id: number | string): Observable<NotificacionCliente> { return this.http.patch<NotificacionCliente>(`${this.API_URL}/${id}/leida`, {}); }
   noLeidasCount(): Observable<number> { return this.misNotificaciones({ leida: false, limit: 200 }).pipe(map((items) => items.filter((n) => !n.leida).length), catchError(() => of(0))); }
 }

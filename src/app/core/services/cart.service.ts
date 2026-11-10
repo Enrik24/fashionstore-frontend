@@ -57,6 +57,26 @@ export class CartService {
     return cart ? Number(cart.total) : 0;
   });
 
+  // [EXAMEN-2] Campaña promocional aplicada automáticamente (ej. Black Fashion November)
+  public promoDiscountSignal = computed(() => {
+    const cart = this.cartSignal();
+    return cart ? Number(cart.descuento_promocion ?? 0) : 0;
+  });
+
+  /** Datos de la campaña activa para la etiqueta del resumen. */
+  public promoActiva = computed(() => {
+    const cart = this.cartSignal();
+    if (!cart || !(Number(cart.descuento_promocion ?? 0) > 0)) return null;
+    return { nombre: cart.promocion_nombre ?? 'Oferta vigente', valor: Number(cart.promocion_valor ?? 0) };
+  });
+
+  public cuponDiscountSignal = computed(() => {
+    const cart = this.cartSignal();
+    if (!cart) return 0;
+    const promo = Number(cart.descuento_promocion ?? 0);
+    return Math.max(0, Number(cart.descuento_aplicado) - promo);
+  });
+
   constructor() {
     // React to authentication state changes
     effect(() => {

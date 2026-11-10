@@ -3,9 +3,11 @@ import { CommonModule } from '@angular/common';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { UserApiService } from '../../../../core/services/user-api.service';
 import { RoleApiService } from '../../../../core/services/role-api.service';
+import { BranchApiService } from '../../../../core/services/branch-api.service';
 import { ToastService } from '../../../../core/services/toast.service';
 import { User, UserCreateDto, UserUpdateDto } from '../../../../core/models/user.model';
 import { Rol } from '../../../../core/models/role.model';
+import { Sucursal } from '../../../../core/models/branch.model';
 import { ModalComponent } from '../../../../shared/components/modal/modal.component';
 import { StatusBadgePipe } from '../../../../shared/pipes/status-badge.pipe';
 
@@ -198,7 +200,7 @@ import { StatusBadgePipe } from '../../../../shared/pipes/status-badge.pipe';
 
               <div class="form-group">
                 <label class="form-label" for="m-rol">Rol Inicial <span class="required">*</span></label>
-                <select id="m-rol" formControlName="rol" class="form-control">
+                <select id="m-rol" formControlName="rol" class="form-control" (change)="onRolChange($event)">
                   <option value="Administrador">Administrador</option>
                   <option value="Encargado">Encargado de Sucursal</option>
                   <option value="Cajero">Cajero POS</option>
@@ -206,6 +208,19 @@ import { StatusBadgePipe } from '../../../../shared/pipes/status-badge.pipe';
                 </select>
               </div>
             </div>
+
+            @if (requiereSucursal()) {
+              <div class="form-group">
+                <label class="form-label" for="m-sucursal">Sucursal Asignada <span class="required">*</span></label>
+                <select id="m-sucursal" formControlName="sucursal_id" class="form-control">
+                  <option [ngValue]="null">Selecciona una sucursal…</option>
+                  @for (sucursal of sucursales(); track sucursal.id) {
+                    <option [ngValue]="sucursal.id">{{ sucursal.nombre }}</option>
+                  }
+                </select>
+                <small class="text-muted">El usuario quedará vinculado a esta sucursal (inventario, ventas y panel propio).</small>
+              </div>
+            }
           } @else {
             <div class="form-group">
               <label class="form-label" for="m-estado">Estado de la Cuenta</label>
@@ -460,13 +475,18 @@ import { StatusBadgePipe } from '../../../../shared/pipes/status-badge.pipe';
 export class UsersComponent implements OnInit {
   private userApi = inject(UserApiService);
   private roleApi = inject(RoleApiService);
+  private branchApi = inject(BranchApiService);
   private toast = inject(ToastService);
   private fb = inject(FormBuilder);
 
   public users = signal<User[]>([]);
   public availableRoles = signal<Rol[]>([]);
+  public sucursales = signal<Sucursal[]>([]);
   public isLoading = signal<boolean>(true);
   public isSaving = signal<boolean>(false);
+
+  /** Indica si el rol elegido exige asignar una sucursal (Encargado/Cajero). */
+  public requiereSucursal = signal<boolean>(false);
   
   public searchQuery = signal<string>('');
   public selectedRoleFilter = signal<string>('');
@@ -487,6 +507,7 @@ export class UsersComponent implements OnInit {
     telefono: [''],
     contrasena: [''],
     rol: ['Cliente'],
+    sucursal_id: [null as number | null],
     estado: ['ACTIVO']
   });
 
@@ -520,6 +541,7 @@ export class UsersComponent implements OnInit {
   ngOnInit(): void {
     this.loadUsers();
     this.loadRoles();
+    this.loadSucursales();
   }
 
   loadUsers(): void {
@@ -538,6 +560,33 @@ export class UsersComponent implements OnInit {
       next: (roles) => this.availableRoles.set(roles),
       error: () => {}
     });
+  }
+
+  loadSucursales(): void {
+    this.branchApi.getBranches(0, 100).subscribe({
+      next: (x) => this.sucursales.set(Array.isArray(x) ? x : []),
+      error: () => {}
+    });
+  }
+
+  esRolDeSucursal(rol: string | null | undefined): boolean {
+    return rol === 'Encargado' || rol === 'Cajero';
+  }
+
+  /** Al cambiar el rol, exige o libera la selección de sucursal. */
+  onRolChange(event: Event): void {
+    const val = (event.target as HTMLSelectElement).value;
+    const requerida = this.esRolDeSucursal(val);
+    this.requiereSucursal.set(requerida);
+    const control = this.userForm.get('sucursal_id');
+    if (!control) return;
+    if (requerida) {
+      control.setValidators([Validators.required]);
+    } else {
+      control.clearValidators();
+      control.reset(null);
+    }
+    control.updateValueAndValidity();
   }
 
   onSearchChange(event: Event): void {
@@ -569,8 +618,10 @@ export class UsersComponent implements OnInit {
       telefono: '',
       contrasena: 'Fashion123*',
       rol: 'Cliente',
+      sucursal_id: null,
       estado: 'ACTIVO'
     });
+    this.requiereSucursal.set(false);
     this.userForm.get('contrasena')?.setValidators([Validators.required, Validators.minLength(8)]);
     this.userForm.get('contrasena')?.updateValueAndValidity();
     this.isUserModalOpen.set(true);
@@ -628,6 +679,12 @@ export class UsersComponent implements OnInit {
         contrasena: formVal.contrasena,
         estado: 'ACTIVO'
       };
+
+      // [EXAMEN-2] Encargados y Cajeros llevan sucursal: el backend crea la
+      // fila en encargados_sucursal / cajeros con este campo.
+      if (this.requiereSucursal()) {
+        createData.sucursal_id = formVal.sucursal_id;
+      }
 
       this.userApi.createUser(createData, formVal.rol).subscribe({
         next: () => {

@@ -1,0 +1,149 @@
+<section class="transfers-page">
+  <header class="page-header">
+    <div class="header-copy">
+      <span class="eyebrow"><i class="ri-arrow-left-right-line"></i> CU14 · Recepción de mercancía</span>
+      <h1>Traspasos por recibir</h1>
+      <p>Verifica, recibe o rechaza las prendas enviadas a <strong>{{ nombreSucursalActual }}</strong>.</p>
+    </div>
+    <button type="button" class="btn btn-outline refresh-btn" (click)="cargar()" [disabled]="cargando() || accion()">
+      <i class="ri-refresh-line" [class.spin-icon]="cargando()"></i> Actualizar
+    </button>
+  </header>
+
+  <section class="summary-grid" aria-label="Resumen de pendientes">
+    <article class="summary-card">
+      <span class="summary-icon rose"><i class="ri-inbox-archive-line"></i></span>
+      <div><small>Traspasos pendientes</small><strong>{{ lista().length }}</strong></div>
+    </article>
+    <article class="summary-card">
+      <span class="summary-icon blue"><i class="ri-package-line"></i></span>
+      <div><small>Unidades por revisar</small><strong>{{ totalPendienteGlobal() }}</strong></div>
+    </article>
+    <article class="summary-card">
+      <span class="summary-icon amber"><i class="ri-shopping-bag-3-line"></i></span>
+      <div><small>Líneas de mercancía</small><strong>{{ totalLineas() }}</strong></div>
+    </article>
+  </section>
+
+  @if (error()) {
+    <section class="state-card error-state">
+      <span class="state-icon"><i class="ri-error-warning-line"></i></span>
+      <div><h2>No pudimos mostrar los traspasos</h2><p>{{ error() }}</p></div>
+      <button type="button" class="btn btn-outline btn-sm" (click)="cargar()">Reintentar</button>
+    </section>
+  } @else if (cargando()) {
+    <section class="state-card">
+      <i class="ri-loader-4-line spin-icon state-icon"></i>
+      <div><h2>Cargando traspasos</h2><p>Consultando la mercancía enviada a tu sucursal…</p></div>
+    </section>
+  } @else if (lista().length === 0) {
+    <section class="state-card empty-state">
+      <span class="state-icon"><i class="ri-checkbox-circle-line"></i></span>
+      <div><h2>Todo está al día</h2><p>No hay traspasos pendientes para recibir en {{ nombreSucursalActual }}.</p></div>
+    </section>
+  } @else {
+    <div class="transfer-list">
+      @for (t of lista(); track t.id) {
+        <article class="transfer-card">
+          <header class="transfer-head">
+            <div class="transfer-id">
+              <span class="transfer-icon"><i class="ri-arrow-left-right-line"></i></span>
+              <div>
+                <div class="title-row">
+                  <h2>{{ t.numero }}</h2>
+                  <span class="badge" [ngClass]="(t.estado | statusBadge).class">{{ (t.estado | statusBadge).label }}</span>
+                </div>
+                <p><i class="ri-time-line"></i> Enviado el {{ t.fecha_envio | date:'dd/MM/yyyy · HH:mm' }}</p>
+              </div>
+            </div>
+            <div class="route">
+              <span><small>Origen</small><strong>{{ nombreSucursal(t.sucursal_origen_id) }}</strong></span>
+              <i class="ri-arrow-right-line"></i>
+              <span><small>Destino</small><strong>{{ nombreSucursal(t.sucursal_destino_id) }}</strong></span>
+            </div>
+          </header>
+
+          <div class="transfer-meta">
+            <span><i class="ri-list-check-2"></i> {{ t.detalles.length }} líneas</span>
+            <span><i class="ri-box-3-line"></i> {{ totalUnidades(t) }} unidades enviadas</span>
+            <span class="pending"><i class="ri-time-line"></i> {{ totalPendiente(t) }} por revisar</span>
+          </div>
+
+          <div class="lines-heading">
+            <div><h3>Detalle de mercancía</h3><p>Indica cuántas unidades llegaron correctamente y cuántas presentan merma.</p></div>
+            <span class="rule"><i class="ri-information-line"></i> Recibida + merma = enviada</span>
+          </div>
+
+          <div class="line-list">
+            @for (d of t.detalles; track d.id) {
+              <div class="line-row" [class.invalid]="!lineaValida(d)">
+                <div class="product-cell">
+                  <span class="product-icon"><i class="ri-t-shirt-2-line"></i></span>
+                  <div>
+                    <strong>{{ d.producto ?? d.producto_nombre ?? 'Producto #' + d.producto_id }}</strong>
+                    <span>Variante #{{ d.variante_producto_id }} · {{ d.cantidad }} enviada(s)</span>
+                  </div>
+                </div>
+                <label class="quantity-field received">
+                  <span>Recibidas</span>
+                  <div><input type="number" min="0" [max]="d.cantidad" [ngModel]="cantidadRecibida(d)" (ngModelChange)="setCantidadRecibida(d, $event)" /><small>/ {{ d.cantidad }}</small></div>
+                </label>
+                <label class="quantity-field merma">
+                  <span>Merma</span>
+                  <div><input type="number" min="0" [max]="d.cantidad" [ngModel]="cantidadMerma(d)" (ngModelChange)="setCantidadMerma(d, $event)" /><small>/ {{ d.cantidad }}</small></div>
+                </label>
+                <div class="pending-cell" [class.clear]="pendiente(d) === 0">
+                  <small>Pendiente</small><strong>{{ pendiente(d) }}</strong>
+                </div>
+              </div>
+            }
+          </div>
+
+          @if (!puedeRecibir(t)) {
+            <div class="validation-note"><i class="ri-alert-line"></i> Ajusta las cantidades para que la suma de recibidas y merma coincida con las unidades enviadas.</div>
+          }
+
+          @if (panelRechazoId() === t.id) {
+            <section class="reject-panel">
+              <div class="reject-title">
+                <span><i class="ri-close-circle-line"></i></span>
+                <div><h3>Rechazar líneas</h3><p>Selecciona las líneas que no aceptarás. El stock volverá a la sucursal origen.</p></div>
+                <button type="button" class="icon-btn" (click)="cerrarRechazo()" aria-label="Cerrar"><i class="ri-close-line"></i></button>
+              </div>
+              <div class="reject-lines">
+                @for (d of t.detalles; track d.id) {
+                  <button type="button" class="reject-line" [class.selected]="lineasRechazables[claveDetalle(d)]" (click)="alternarLineaRechazo(d)">
+                    <span class="check-box"><i class="ri-check-line"></i></span>
+                    <span>{{ d.producto ?? d.producto_nombre ?? 'Producto #' + d.producto_id }} · {{ d.cantidad }} u.</span>
+                  </button>
+                }
+              </div>
+              <label class="reject-reason">
+                <span>Motivo del rechazo <b>*</b></span>
+                <input type="text" class="form-control" [(ngModel)]="motivoRechazo" placeholder="Ej.: producto dañado o incompleto" maxlength="500" />
+              </label>
+              <div class="reject-actions">
+                <button type="button" class="btn btn-outline btn-sm" (click)="cerrarRechazo()">Cancelar</button>
+                <button type="button" class="btn btn-danger btn-sm" (click)="rechazar(t)" [disabled]="accion() !== null">
+                  @if (accion() === 'rechazar') { <i class="ri-loader-4-line spin-icon"></i> Rechazando… } @else { <i class="ri-close-circle-line"></i> Confirmar rechazo }
+                </button>
+              </div>
+            </section>
+          }
+
+
+          <footer class="transfer-actions">
+            <p><i class="ri-shield-check-line"></i> La confirmación registrará la recepción y actualizará el inventario de la sucursal.</p>
+            <div>
+              <button type="button" class="btn btn-outline btn-sm" (click)="abrirRechazo(t)" [disabled]="accion() !== null"><i class="ri-close-circle-line"></i> Rechazar líneas</button>
+              <button type="button" class="btn btn-accent btn-sm" (click)="recibir(t)" [disabled]="!puedeRecibir(t) || accion() !== null">
+                @if (accion() === 'recibir') { <i class="ri-loader-4-line spin-icon"></i> Confirmando… } @else { <i class="ri-check-circle-line"></i> Confirmar recepción }
+              </button>
+            </div>
+          </footer>
+        </article>
+      }
+    </div>
+  }
+</section>
+

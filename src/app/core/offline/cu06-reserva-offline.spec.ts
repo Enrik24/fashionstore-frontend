@@ -41,7 +41,15 @@ describe('ReservationService - reserva sin conexión', () => {
     documentos = jasmine.createSpyObj<OfflineDocumentService>('OfflineDocumentService', [
       'generarComprobanteTemporal'
     ]);
-    catalogo = jasmine.createSpyObj<OfflineCatalogService>('OfflineCatalogService', ['buscarLocal']);
+    catalogo = jasmine.createSpyObj<OfflineCatalogService>('OfflineCatalogService', [
+      'buscarLocal',
+      // [EXAMEN-2] El servicio resuelve precio/detalle de la variante desde el
+      // catálogo local; en estos tests se simula catálogo vacío (total Bs. 0).
+      'obtenerVariante',
+      'obtenerProducto'
+    ]);
+    catalogo.obtenerVariante.and.resolveTo(null);
+    catalogo.obtenerProducto.and.resolveTo(null);
 
     cola.encolar.and.resolveTo(crearOperacionFalsa({
       uuid_operacion: 'op-reserva',

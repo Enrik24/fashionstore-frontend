@@ -19,6 +19,8 @@ import { StorageService } from '../services/storage.service';
 import { OfflineApiService, PromocionesOffline } from '../services/offline-api.service';
 import { StorageQuotaService } from './storage-quota.service';
 import { OfflineAuditService } from './offline-audit.service';
+import { BranchApiService } from '../services/branch-api.service';
+import { Sucursal } from '../models/branch.model';
 
 export interface OpcionesDescarga {
   sucursalId?: number | null;
@@ -44,6 +46,7 @@ const CLAVE_PROMOCIONES = 'promociones';
 const CLAVE_DATOS_MAESTROS = 'datos_maestros';
 const CLAVE_IMPUESTOS = 'impuestos';
 const CLAVE_STRIPE = 'stripe';
+const CLAVE_SUCURSALES = 'sucursales_cache';
 
 /**
  * [EXAMEN-2] CU05 / RNF-14: paquete offline versionado en IndexedDB.
@@ -57,6 +60,7 @@ export class OfflineCatalogService {
   private offlineApi = inject(OfflineApiService);
   private quota = inject(StorageQuotaService);
   private audit = inject(OfflineAuditService);
+  private branchApi = inject(BranchApiService);
 
   async descargarPaquete(opciones: OpcionesDescarga = {}): Promise<ResultadoDescargaOffline> {
     const sucursalId = opciones.sucursalId ?? this.sucursalActual();
@@ -119,6 +123,9 @@ export class OfflineCatalogService {
       fecha_corte: completo.fecha_corte
     } satisfies VersionPaquete);
     await this.guardarMeta(CLAVE_CURSOR, completo.version);
+    // [EXAMEN-2] CU06: la reserva offline necesita elegir sucursal. Se cachea
+    // aquí para no depender del backend cuando se desconecte la red.
+    await this.cachearSucursales();
 
     const fecha = new Date().toISOString();
     await this.marcarSello(fecha);
@@ -299,23 +306,45 @@ export class OfflineCatalogService {
     }
 
     resultado.sort((a, b) => a.nombre.localeCompare(b.nombre));
-    return filtros.limite != null ? resultado.slice(0, filtros.limite) : resultado;
+    const normalizados = resultado.map((p) => ({ ...p, imagenes: this.normalizarImagenes(p.imagenes) }));
+    return filtros.limite != null ? normalizados.slice(0, filtros.limite) : normalizados;
   }
 
   async variantesDeProducto(productoId: number): Promise<VarianteOffline[]> {
     return this.indexedDb.obtenerPorIndice<VarianteOffline>('variantes', 'producto_id', productoId);
   }
 
+  async obtenerVariante(varianteId: number): Promise<VarianteOffline | null> {
+    const directa = await this.indexedDb.obtener<VarianteOffline>('variantes', varianteId);
+    if (directa) return directa;
+    // Fallback en caso de claves legacy (number vs string).
+    const todas = await this.indexedDb.obtenerTodos<VarianteOffline>('variantes');
+    return todas.find((v) => v.id === varianteId || String(v.id) === String(varianteId)) ?? null;
+  }
+
+  async obtenerProducto(productoId: number): Promise<ProductoOffline | null> {
+    const directo = await this.indexedDb.obtener<ProductoOffline>('productos', productoId);
+    if (directo) return { ...directo, imagenes: this.normalizarImagenes(directo.imagenes) };
+    const todas = await this.indexedDb.obtenerTodos<ProductoOffline>('productos');
+    const encontrado = todas.find((p) => p.id === productoId || String(p.id) === String(productoId)) ?? null;
+    return encontrado ? { ...encontrado, imagenes: this.normalizarImagenes(encontrado.imagenes) } : null;
+  }
+
   async stockLocal(varianteId: number, sucursalId?: number | null): Promise<StockOffline | null> {
     const sucursal = sucursalId ?? this.sucursalActual();
+    // No usar el índice: la BD v1 antigua lo creó como 'variante_id' (campo
+    // inexistente) y un upgrade a v2 puede quedar bloqueado si la conexión
+    // vieja sigue abierta. Escanear es fiable y el stock es pequeño.
     if (sucursal == null) {
-      const candidatos = await this.indexedDb.obtenerPorIndice<StockOffline>('stock', 'variante_id', varianteId);
+      const todos = await this.indexedDb.obtenerTodos<StockOffline>('stock');
+      const candidatos = todos.filter((s) => s.variante_producto_id === varianteId);
       return candidatos.find((s) => s.cantidad_disponible > 0) ?? candidatos[0] ?? null;
     }
     const clave = `${varianteId}:${sucursal}`;
     const directo = await this.indexedDb.obtener<StockOffline>('stock', clave);
     if (directo) return directo;
-    const candidatos = await this.indexedDb.obtenerPorIndice<StockOffline>('stock', 'variante_id', varianteId);
+    const todos = await this.indexedDb.obtenerTodos<StockOffline>('stock');
+    const candidatos = todos.filter((s) => s.variante_producto_id === varianteId);
     return candidatos.find((s) => s.sucursal_id === sucursal) ?? null;
   }
 
@@ -370,7 +399,28 @@ export class OfflineCatalogService {
   // ------------------------- utilidades -------------------------
 
   private normalizarProductos(productos: ProductoOffline[], tenantId: number): ProductoOffline[] {
-    return productos.map((producto) => ({ ...producto, tenant_id: tenantId }));
+    return productos.map((producto) => ({
+      ...producto,
+      tenant_id: tenantId,
+      imagenes: this.normalizarImagenes(producto.imagenes),
+    }));
+  }
+
+  private normalizarImagenes(valor: unknown): string[] {
+    if (!valor) return [];
+    if (Array.isArray(valor)) return valor.map(String).filter(Boolean);
+    if (typeof valor === 'string') {
+      const texto = valor.trim();
+      if (!texto) return [];
+      try {
+        const parsed = JSON.parse(texto);
+        if (Array.isArray(parsed)) return parsed.map(String).filter(Boolean);
+        return [texto];
+      } catch {
+        return [texto];
+      }
+    }
+    return [];
   }
 
   private normalizarVariantes(variantes: VarianteOffline[], tenantId: number): VarianteOffline[] {
@@ -403,6 +453,27 @@ export class OfflineCatalogService {
       .toLowerCase()
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '');
+  }
+
+  // ===== [EXAMEN-2] Sucursales para reserva/POS offline =====
+
+  async guardarSucursalesCache(sucursales: Sucursal[]): Promise<void> {
+    await this.guardarMeta(CLAVE_SUCURSALES, sucursales);
+  }
+
+  async obtenerSucursalesCache(): Promise<Sucursal[]> {
+    return (await this.obtenerMeta<Sucursal[]>(CLAVE_SUCURSALES)) ?? [];
+  }
+
+  /** Refresca el cache sin interrumpir la descarga si la red o el rol fallan. */
+  async cachearSucursales(): Promise<void> {
+    try {
+      const sucursales = await this.primero(this.branchApi.getBranches());
+      const activas = sucursales.filter((sucursal) => sucursal.estado === 'ACTIVO');
+      await this.guardarSucursalesCache(activas);
+    } catch {
+      // Sin conexión o sin permisos: se conserva el cache anterior.
+    }
   }
 
   private tenantId(): number {

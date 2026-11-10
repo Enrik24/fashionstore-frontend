@@ -15,12 +15,12 @@ describe('CU14 - Traspasos', () => {
     expect((await p).numero).toBe('T-1');
   });
   it('recepción parcial respeta recibida+merma=cantidad', async () => {
-    const p = firstValueFrom(api.recibir(1, { accion: 'RECIBIR', lineas: [{ variante_producto_id: 10, cantidad_recibida: 4, cantidad_merma: 1 }] }));
+    const p = firstValueFrom(api.recibir(1, { detalles: [{ detalle_id: 21, cantidad_recibida: 4, cantidad_merma: 1 }] }));
     httpMock.expectOne((r) => r.url.includes('/recibir')).flush({ id: 1, numero: 'T-1', estado: 'RECIBIDO', detalles: [] });
     expect((await p).estado).toBe('RECIBIDO');
   });
   it('rechazo por línea y cancelación', async () => {
-    const r = firstValueFrom(api.rechazar(1, { lineas: [{ variante_producto_id: 10, cantidad_recibida: 0, motivo: 'dañado' }] }));
+    const r = firstValueFrom(api.rechazar(1, { detalles: [{ detalle_id: 21 }], motivo: 'Prenda dañada', devolver_origen: true }));
     httpMock.expectOne((x) => x.url.includes('/rechazar')).flush({ id: 1, numero: 'T-1', estado: 'RECHAZADO_PARCIAL', detalles: [] });
     expect((await r).estado).toBe('RECHAZADO_PARCIAL');
     const c = firstValueFrom(api.cancelar(2));

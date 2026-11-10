@@ -208,15 +208,26 @@ import { PendingPaymentService } from '../../../../core/offline/pending-payment.
                     <span>Bs. {{ cartService.subtotalSignal() | number:'1.2-2' }}</span>
                   </div>
                   @if (cartService.discountSignal() > 0) {
-                    <div class="calc-row discount">
-                      <span>
-                        Descuento cupón
-                        @if (cartService.cartSignal()?.cupon) {
-                          <span class="coupon-code">({{ cartService.cartSignal()?.cupon?.codigo }})</span>
-                        }
-                      </span>
-                      <span>- Bs. {{ cartService.discountSignal() | number:'1.2-2' }}</span>
-                    </div>
+                    @if (cartService.promoActiva(); as promo) {
+                      <!-- [EXAMEN-2] Campaña automática (ej. Black Fashion November 15%) -->
+                      <div class="calc-row discount">
+                        <span>
+                          <i class="ri-fire-line promo-fire"></i> {{ promo.nombre }} (-{{ promo.valor }}%)
+                        </span>
+                        <span>- Bs. {{ cartService.promoDiscountSignal() | number:'1.2-2' }}</span>
+                      </div>
+                    }
+                    @if (cartService.cuponDiscountSignal() > 0) {
+                      <div class="calc-row discount">
+                        <span>
+                          Descuento cupón
+                          @if (cartService.cartSignal()?.cupon) {
+                            <span class="coupon-code">({{ cartService.cartSignal()?.cupon?.codigo }})</span>
+                          }
+                        </span>
+                        <span>- Bs. {{ cartService.cuponDiscountSignal() | number:'1.2-2' }}</span>
+                      </div>
+                    }
                   }
                   <div class="calc-row">
                     <span>Envío</span>
@@ -457,6 +468,12 @@ import { PendingPaymentService } from '../../../../core/offline/pending-payment.
     .coupon-code {
       font-size: 0.75rem;
       color: var(--text-muted);
+    }
+
+    /* [EXAMEN-2] Campaña automática: acento de marca en la fila del resumen */
+    .promo-fire {
+      color: var(--accent, #e11d48);
+      margin-right: 0.25rem;
     }
 
     .coupon-error {

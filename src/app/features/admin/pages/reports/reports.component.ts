@@ -209,6 +209,11 @@ import { Sucursal } from '../../../../core/models/branch.model';
                         <span class="kpi-desc">{{ kpi.descripcion || 'Sin descripción' }}</span>
                       </div>
                       <div class="kpi-badges">
+                        @if (kpi.metrica) {
+                          <span class="badge badge-success" title="El valor actual se calcula automáticamente desde los datos del negocio">
+                            <i class="ri-refresh-line"></i> Tiempo real
+                          </span>
+                        }
                         <span class="badge" [class.badge-success]="kpi.tendencia === 'Positiva'" [class.badge-danger]="kpi.tendencia === 'Negativa'" [class.badge-neutral]="kpi.tendencia !== 'Positiva' && kpi.tendencia !== 'Negativa'">
                           {{ kpi.tendencia }}
                         </span>
@@ -552,16 +557,34 @@ import { Sucursal } from '../../../../core/models/branch.model';
                 <label>Descripción</label>
                 <textarea class="form-control" [(ngModel)]="newKpi.descripcion" rows="2" placeholder="Objetivo de este indicador..."></textarea>
               </div>
+              <div class="form-group">
+                <label>Métrica en Tiempo Real</label>
+                <select class="form-control" [(ngModel)]="newKpi.metrica">
+                  <option [ngValue]="null">Manual (ingreso el valor yo mismo)</option>
+                  @for (m of metricasDisponibles; track m.clave) {
+                    <option [value]="m.clave">{{ m.etiqueta }}</option>
+                  }
+                </select>
+                <small class="text-muted">Si vinculás una métrica, el "Valor Actual" se calcula automáticamente desde los datos reales del negocio.</small>
+              </div>
               <div class="form-row">
-                <div class="form-group col">
-                  <label>Valor Actual *</label>
-                  <input type="number" class="form-control" [(ngModel)]="newKpi.valor_actual" />
-                </div>
+                @if (!newKpi.metrica) {
+                  <div class="form-group col">
+                    <label>Valor Actual *</label>
+                    <input type="number" class="form-control" [(ngModel)]="newKpi.valor_actual" />
+                  </div>
+                }
                 <div class="form-group col">
                   <label>Valor Objetivo *</label>
                   <input type="number" class="form-control" [(ngModel)]="newKpi.valor_objetivo" />
                 </div>
               </div>
+              @if (newKpi.metrica) {
+                <div class="form-group">
+                  <label class="text-muted">Valor Actual</label>
+                  <input type="text" class="form-control" value="Se calculará automáticamente" disabled />
+                </div>
+              }
               <div class="form-row">
                 <div class="form-group col">
                   <label>Unidad de Medida *</label>
@@ -961,6 +984,15 @@ export class ReportsComponent implements OnInit {
     this.setTab(ev.tab);
   }
 
+  /** Catálogo de métricas del negocio vinculables a un KPI (deben coincidir con KPIService.METRICAS_KPI del backend). */
+  metricasDisponibles = [
+    { clave: 'ventas_mes', etiqueta: 'Ventas del mes (Bs.)' },
+    { clave: 'tasa_conversion_reservas', etiqueta: 'Conversión de reservas (%)' },
+    { clave: 'ticket_promedio', etiqueta: 'Ticket promedio (Bs.)' },
+    { clave: 'stock_bajo_minimo', etiqueta: 'Stock bajo mínimo (prendas)' },
+    { clave: 'clientes_activos', etiqueta: 'Clientes activos' },
+  ];
+
   newKpi: Partial<KPIItem> = {
     nombre: '',
     descripcion: '',
@@ -968,7 +1000,8 @@ export class ReportsComponent implements OnInit {
     valor_objetivo: 100,
     unidad_medida: '%',
     tendencia: 'Positiva',
-    periodo: 'Mensual'
+    periodo: 'Mensual',
+    metrica: null
   };
 
   ngOnInit(): void {
@@ -1095,7 +1128,8 @@ export class ReportsComponent implements OnInit {
       valor_objetivo: 100,
       unidad_medida: '%',
       tendencia: 'Positiva',
-      periodo: 'Mensual'
+      periodo: 'Mensual',
+      metrica: null
     };
     this.showKpiModal.set(true);
   }
@@ -1106,10 +1140,15 @@ export class ReportsComponent implements OnInit {
 
   guardarKpi() {
     if (!this.newKpi.nombre) return;
-    this.reportsService.createKpi(this.newKpi).subscribe({
+    // Normalizar: métrica vacía => manual (null en backend)
+    const payload = { ...this.newKpi, metrica: this.newKpi.metrica || null };
+    this.reportsService.createKpi(payload).subscribe({
       next: (created) => {
         this.kpiList.update((prev) => [...prev, created]);
         this.closeKpiModal();
+        // Recargar el dashboard para que los KPIs con métrica vinculada
+        // muestren su valor calculado en tiempo real.
+        this.cargarKpiDashboard();
       },
       error: (err) => console.error('Error al crear KPI', err)
     });

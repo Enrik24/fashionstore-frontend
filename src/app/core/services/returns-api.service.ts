@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
-import { Observable } from 'rxjs';
+import { Observable, map } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import {
   SolicitudDevolucion,
@@ -63,7 +63,7 @@ export class ReturnsApiService {
 
   // ===== [EXAMEN-2] CU13/CU18 =====
   solicitarReposicion(dto: any): Observable<SolicitudDevolucion> { return this.http.post<SolicitudDevolucion>(`${this.API_URL}/reposicion`, { ...dto, tipo: 'REPOSICION' }); }
-  listarReposiciones(filtros: { sucursal_id?: number; estado?: string } = {}): Observable<SolicitudDevolucion[]> { let p = new HttpParams(); if (filtros.sucursal_id) p = p.set('sucursal_id', String(filtros.sucursal_id)); if (filtros.estado) p = p.set('estado', filtros.estado); return this.http.get<SolicitudDevolucion[]>(`${this.API_URL}/reposiciones`, { params: p }); }
+  listarReposiciones(filtros: { sucursal_id?: number; estado?: string } = {}): Observable<SolicitudDevolucion[]> { let p = new HttpParams(); if (filtros.sucursal_id) p = p.set('sucursal_id', String(filtros.sucursal_id)); if (filtros.estado) p = p.set('estado', filtros.estado); return this.http.get<unknown>(`${this.API_URL}/reposiciones`, { params: p }).pipe(map((r) => (Array.isArray(r) ? (r as SolicitudDevolucion[]) : Array.isArray((r as { reposiciones?: unknown })?.reposiciones) ? ((r as { reposiciones: SolicitudDevolucion[] }).reposiciones) : []))); }
   buscarVentaElegible(numeroComprobante: string): Observable<any> { return this.http.get<any>(`${this.API_URL}/venta/${encodeURIComponent(numeroComprobante)}`); }
   validarPlazo(ordenId: number): Observable<any> { return this.http.get<any>(`${this.API_URL}/validar-plazo/${ordenId}`); }
   calcularDiferencia(items: any[]): Observable<any> { return this.http.post<any>(`${this.API_URL}/calcular-diferencia`, { items }); }

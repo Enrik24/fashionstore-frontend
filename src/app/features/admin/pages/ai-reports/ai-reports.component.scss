@@ -1,0 +1,409 @@
+:host {
+  display: block;
+}
+
+.ai-reports-page {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.page-head {
+  margin-bottom: 0.25rem;
+
+  h1 {
+    margin: 0.35rem 0 0.45rem;
+    color: var(--text-main);
+    font-size: clamp(1.55rem, 3vw, 2rem);
+    font-weight: 750;
+    letter-spacing: -0.03em;
+  }
+
+  p {
+    max-width: 720px;
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 0.95rem;
+  }
+}
+
+.card-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.9rem;
+
+  h2 {
+    margin: 0 0 0.25rem;
+    color: var(--text-main);
+    font-size: 1.1rem;
+  }
+
+  p {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+  }
+}
+
+.card-icon,
+.result-icon,
+.summary-icon {
+  display: grid;
+  flex: 0 0 auto;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border-radius: 12px;
+  background: var(--accent-glow);
+  color: var(--accent);
+  font-size: 1.25rem;
+}
+
+.composer-card,
+.history-card,
+.result-card {
+  padding: 1.35rem;
+}
+
+.composer-card .form-group {
+  margin-top: 1.25rem;
+}
+
+.prompt-input {
+  min-height: 112px;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.form-hint {
+  align-self: flex-end;
+}
+
+.composer-actions,
+.export-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
+.generate-button {
+  min-width: 190px;
+}
+
+// ===== Botón "Dictar por voz": estados visuales =====
+.dictar-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+
+  &.recording {
+    border-color: var(--error);
+    background: var(--error-bg);
+    color: var(--error);
+    cursor: pointer;
+
+    strong {
+      text-decoration: underline;
+    }
+  }
+
+  &.processing {
+    opacity: 0.85;
+  }
+
+  &.unsupported {
+    opacity: 0.6;
+  }
+}
+
+.mic-pulse {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--error);
+  color: #fff;
+  font-size: 0.7rem;
+  animation: mic-pulse 1.2s ease-in-out infinite;
+}
+
+.mic-timer {
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  background: rgba(239, 68, 68, 0.12);
+  color: var(--error);
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.voice-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--error);
+  font-weight: 600;
+  animation: voice-blink 1.2s ease-in-out infinite;
+}
+
+.voice-live-waiting {
+  color: var(--text-muted);
+  font-weight: 600;
+  font-style: italic;
+}
+
+@keyframes mic-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.45);
+  }
+
+  50% {
+    transform: scale(1.12);
+    box-shadow: 0 0 0 6px rgba(239, 68, 68, 0);
+  }
+}
+
+@keyframes voice-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.55;
+  }
+}
+
+.suggestions {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1.25rem;
+  padding-top: 1.1rem;
+  border-top: 1px solid var(--border-light);
+}
+
+.suggestion-block {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.suggestion-label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.chip {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background: #f8fafc;
+  color: var(--text-main);
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+
+  &:hover {
+    border-color: var(--accent);
+    background: var(--accent-glow);
+    color: var(--accent-dark);
+  }
+}
+
+.chip-template {
+  background: white;
+}
+
+.result-card {
+  display: flex;
+  gap: 1rem;
+  border-color: rgba(16, 185, 129, 0.28);
+  background: linear-gradient(135deg, #ffffff 60%, var(--success-bg));
+}
+
+.result-content {
+  flex: 1;
+}
+
+.result-title-row,
+.summary-title-row,
+.history-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.result-title-row h2,
+.summary-title-row h2 {
+  margin: 0;
+  color: var(--text-main);
+  font-size: 1.08rem;
+}
+
+.result-prompt {
+  margin: 0.5rem 0 0.9rem;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.history-heading {
+  justify-content: flex-start;
+  margin-bottom: 1rem;
+}
+
+.history-heading > div:nth-child(2) {
+  flex: 1;
+}
+
+.count-badge {
+  min-width: 32px;
+  padding: 0.25rem 0.55rem;
+  border-radius: 999px;
+  background: var(--accent-glow);
+  color: var(--accent-dark);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.report-history-table {
+  min-width: 760px;
+
+  td:first-child {
+    width: 48%;
+  }
+}
+
+.report-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+
+  > div {
+    display: grid;
+    gap: 0.15rem;
+  }
+
+  strong {
+    max-width: 430px;
+    overflow: hidden;
+    color: var(--text-main);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  span {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+  }
+}
+
+.report-row-icon {
+  display: grid;
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: 9px;
+  background: #f1f5f9;
+  color: var(--secondary) !important;
+  font-size: 1rem !important;
+}
+
+.date-cell {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+
+.detail-button {
+  white-space: nowrap;
+}
+
+.state-message {
+  display: flex;
+  min-height: 150px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  padding: 2rem;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.state-empty .empty-icon {
+  color: #cbd5e1;
+  font-size: 2.5rem;
+}
+
+.state-empty strong {
+  color: var(--text-main);
+}
+
+.state-error {
+  color: var(--error);
+}
+
+.notice {
+  margin: 0.75rem 0;
+  padding: 0.8rem 1rem;
+  border-radius: 10px;
+  font-size: 0.85rem;
+
+  p {
+    margin: 0.3rem 0 0;
+  }
+}
+
+.notice-warning {
+  border: 1px solid #fcd34d;
+  background: var(--warning-bg);
+  color: #92400e;
+}
+
+.notice-error {
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  background: var(--error-bg);
+  color: var(--error);
+}
+
+.spin-icon {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 640px) {
+  .composer-card,
+  .history-card,
+  .result-card {
+    padding: 1rem;
+  }
+
+  .result-card {
+    flex-direction: column;
+  }
+
+  .composer-actions .btn,
+  .generate-button {
+    flex: 1;
+    min-width: 0;
+  }
+}

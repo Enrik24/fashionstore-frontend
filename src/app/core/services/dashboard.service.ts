@@ -6,14 +6,17 @@ import { ReportsService } from './reports.service';
 import { InventoryApiService } from './inventory-api.service';
 import { BranchApiService } from './branch-api.service';
 import { CatalogApiService } from './catalog-api.service';
+import { AnaliticaApiService } from './analitica-api.service';
 import { DashboardFilters, KpiConfig, KpiTone, WidgetStatus } from '../models/dashboard.model';
 import { ReporteVentas, ReporteVentasComparativo } from '../models/report.model';
 import { CHART_COLORS, CHART_PALETTE, BASE_CHART_OPTIONS } from '../../shared/config/chart-theme';
 
 export interface DashboardVm {
   kpiCards: KpiConfig[];
-  comparativa: ChartConfiguration<'bar'>;
+  /** [EXAMEN-2] Comparativa de períodos en mini-cards (Actual vs Anterior + Δ%). */
+  comparativa: ComparativaItem[];
   topProductos: ChartConfiguration<'bar'>;
+  topRepuestas: ChartConfiguration<'bar'> | null;
   mixCanal: ChartConfiguration<'doughnut'>;
   metodosPago: ChartConfiguration<'doughnut'> | null;
   reservasPorEstado: ChartConfiguration<'bar'>;
@@ -22,12 +25,23 @@ export interface DashboardVm {
   score: { valor: number; tono: KpiTone; etiqueta: string } | null;
 }
 
+/** Item del widget "Comparativa de períodos". */
+export interface ComparativaItem {
+  label: string;
+  /** true = magnitud monetaria (Bs.), false = conteo de transacciones */
+  monetario: boolean;
+  actual: number;
+  anterior: number | null;
+  deltaPct: number | null;
+}
+
 @Injectable({ providedIn: 'root' })
 export class DashboardService {
   private reports = inject(ReportsService);
   private inventoryApi = inject(InventoryApiService);
   private branchApi = inject(BranchApiService);
   private catalogApi = inject(CatalogApiService);
+  private analitica = inject(AnaliticaApiService);
 
   getDashboardBundle(f: DashboardFilters): Observable<DashboardVm> {
     return forkJoin({
@@ -38,8 +52,11 @@ export class DashboardService {
         : of(null),
       inventario: this.reports.getInventoryReport(f.sucursalId).pipe(catchError(() => of(null))),
       reservas: this.reports.getReservationsReport(f.fechaInicio, f.fechaFin, f.sucursalId).pipe(catchError(() => of(null))),
-      clientes: this.reports.getClientsReport().pipe(catchError(() => of(null))),
+      clientes: this.reports.getClientsReport(f.sucursalId).pipe(catchError(() => of(null))),
       financiero: this.reports.getFinancialReport(f.fechaInicio, f.fechaFin).pipe(catchError(() => of(null))),
+      // [EXAMEN-2] Top 5 prendas repuestas (CU12 drilldown; filtra por sucursal)
+      repuestas: this.analitica.detalleKpi('prendas_repuestas', { sucursal_id: f.sucursalId ?? null })
+        .pipe(catchError(() => of(null))),
       sucursales: this.branchApi.getBranches(0, 500).pipe(catchError(() => of([]))),
       productos: this.catalogApi.getProducts(0, 1000).pipe(catchError(() => of([]))),
       alerts: this.inventoryApi.getStockAlerts().pipe(catchError(() => of([])))
@@ -56,6 +73,10 @@ export class DashboardService {
     mark('inventario', raw.inventario);
     mark('reservas', raw.reservas);
     mark('clientes', raw.clientes);
+    // [EXAMEN-2] Top prendas repuestas: 'empty' cuando el drilldown no trae items
+    const repuestasItems = raw.repuestas?.items ?? null;
+    if (repuestasItems === null) estado['repuestas'] = 'error';
+    else estado['repuestas'] = repuestasItems.length ? 'success' : 'empty';
 
     const bs = (n: number) => `Bs. ${Number(n || 0).toFixed(2)}`;
     const kpis: KpiConfig[] = [];
@@ -104,8 +125,9 @@ export class DashboardService {
 
     return {
       kpiCards: kpis,
-      comparativa: this.comparativaPeriodosChart(cmp, ventas),
+      comparativa: this.comparativaPeriodosItems(cmp, ventas),
       topProductos: this.topProductosChart(ventas),
+      topRepuestas: this.topRepuestasChart(raw.repuestas),
       mixCanal: this.doughnutChart(['Online', 'Presencial'],
         [ventas?.resumen.total_online ?? 0, ventas?.resumen.total_presencial ?? 0]),
       metodosPago: raw.financiero?.desglose_por_metodo_pago
@@ -119,13 +141,58 @@ export class DashboardService {
   }
 
   topProductosChart(ventas: ReporteVentas | null): ChartConfiguration<'bar'> {
-    const top = (ventas?.top_productos ?? []).slice(0, 10);
+    const top = (ventas?.top_productos ?? []).slice(0, 5);
     return { type: 'bar',
       data: { labels: top.map(t => t.nombre),
         datasets: [{ label: 'Unidades vendidas', data: top.map(t => t.unidades_vendidas),
           backgroundColor: CHART_COLORS.accent, borderRadius: 6, maxBarThickness: 22 }] },
       options: { ...BASE_CHART_OPTIONS, indexAxis: 'y',
         plugins: { ...BASE_CHART_OPTIONS.plugins, legend: { display: false } } } };
+  }
+
+  /** [EXAMEN-2] Top 5 prendas repuestas (devoluciones tipo REPOSICION, CU12). */
+  topRepuestasChart(repuestas: any): ChartConfiguration<'bar'> | null {
+    const items: Array<{ producto: string; talla?: string | null; color?: string | null; unidades: number } | any> =
+      repuestas?.items ?? [];
+    if (!items?.length) return null;
+    const top = items.slice(0, 5);
+    const label = (it: any) =>
+      `${it.producto ?? 'Producto'}${it.talla ? ' · ' + it.talla : ''}${it.color ? ' / ' + it.color : ''}`;
+    return { type: 'bar',
+      data: { labels: top.map(label),
+        datasets: [{ label: 'Unidades repuestas', data: top.map(i => Number(i.unidades ?? 0)),
+          backgroundColor: CHART_COLORS.success, borderRadius: 6, maxBarThickness: 22 }] },
+      options: { ...BASE_CHART_OPTIONS, indexAxis: 'y',
+        plugins: { ...BASE_CHART_OPTIONS.plugins, legend: { display: false } } } };
+  }
+
+  /** [EXAMEN-2] Comparativa de períodos en mini-cards: valores reales por
+   * indicador, evitando mezclar escalas (Bs. miles vs conteos) en una sola barra. */
+  comparativaPeriodosItems(
+    cmp: ReporteVentasComparativo | null,
+    ventas: ReporteVentas | null
+  ): ComparativaItem[] {
+    const cur = cmp?.actual?.resumen ?? ventas?.resumen;
+    const prev = cmp?.anterior?.resumen ?? null;
+    if (!cur && !prev) return [];
+    const delta = (a: number, b: number): number | null => {
+      if (!b) return a > 0 ? 100 : 0;
+      return Math.round(((a - b) / b) * 1000) / 10;
+    };
+    const val = (res: any, key: string) => Number(res?.[key] ?? 0);
+    const mk = (label: string, monetario: boolean, key: string): ComparativaItem => ({
+      label,
+      monetario,
+      actual: val(cur, key),
+      anterior: prev ? val(prev, key) : null,
+      deltaPct: cur && prev ? delta(val(cur, key), val(prev, key)) : null
+    });
+    return [
+      mk('Recaudado', true, 'total_recaudado'),
+      mk('Pedidos online', false, 'cantidad_pedidos_online'),
+      mk('Ventas presenciales', false, 'cantidad_ventas_presenciales'),
+      mk('Ticket promedio', true, 'ticket_promedio')
+    ];
   }
 
   doughnutChart(labels: string[], values: number[]): ChartConfiguration<'doughnut'> {
@@ -151,20 +218,6 @@ export class DashboardService {
           { label: 'Stock mínimo', data: top.map(a => a.stock_minimo ?? 0), backgroundColor: CHART_COLORS.neutral, borderRadius: 4 }
         ] },
       options: { ...BASE_CHART_OPTIONS, indexAxis: 'y' } };
-  }
-
-  comparativaPeriodosChart(cmp: ReporteVentasComparativo | null, ventas: ReporteVentas | null): ChartConfiguration<'bar'> {
-    const cur = cmp?.actual?.resumen ?? ventas?.resumen;
-    const prev = cmp?.anterior?.resumen;
-    return { type: 'bar',
-      data: { labels: ['Recaudado', 'Pedidos online', 'Ventas presenciales', 'Ticket'],
-        datasets: [
-          { label: 'Actual', data: cur ? [cur.total_recaudado, cur.cantidad_pedidos_online, cur.cantidad_ventas_presenciales, cur.ticket_promedio] : [],
-            backgroundColor: CHART_COLORS.accent, borderRadius: 6 },
-          { label: 'Anterior', data: prev ? [prev.total_recaudado, prev.cantidad_pedidos_online, prev.cantidad_ventas_presenciales, prev.ticket_promedio] : [],
-            backgroundColor: CHART_COLORS.neutral, borderRadius: 6 }
-        ] },
-      options: { ...BASE_CHART_OPTIONS, scales: { y: { beginAtZero: true } } } };
   }
 
   serieDiariaChart(ventas: ReporteVentas | null): ChartConfiguration<'line'> | null {

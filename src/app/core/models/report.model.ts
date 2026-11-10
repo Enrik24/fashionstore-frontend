@@ -126,6 +126,8 @@ export interface KPIItem {
   unidad_medida: string;
   tendencia: 'Positiva' | 'Negativa' | 'Neutra' | string;
   periodo: string;
+  /** [EXAMEN-2] Métrica del negocio vinculada; si se define, valor_actual se calcula en el backend. */
+  metrica?: 'ventas_mes' | 'tasa_conversion_reservas' | 'ticket_promedio' | 'stock_bajo_minimo' | 'clientes_activos' | null;
   fecha_actualizacion?: string;
 }
 

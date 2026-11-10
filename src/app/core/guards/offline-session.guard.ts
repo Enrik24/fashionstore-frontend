@@ -6,11 +6,12 @@ import { ToastService } from '../services/toast.service';
 /**
  * [EXAMEN-2] CU17: exige una sesión offline válida y no vencida.
  */
-export const offlineSessionGuard: CanActivateFn = (route, state) => {
+export const offlineSessionGuard: CanActivateFn = async (route, state) => {
   const offlineSession = inject(OfflineSessionService);
   const router = inject(Router);
   const toast = inject(ToastService);
 
+  await offlineSession.esperarCarga();
   if (offlineSession.haySesionOffline()) return true;
 
   toast.info('Ingresa tu PIN para operar sin conexión.', 'Sesión offline requerida');

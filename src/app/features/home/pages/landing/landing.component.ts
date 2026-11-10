@@ -6,13 +6,16 @@ import { AiService } from '../../../../core/services/ai.service';
 import { PublicCatalogService } from '../../../../core/services/public-catalog.service';
 import { Producto } from '../../../../core/models/catalog.model';
 import { ProductCardComponent } from '../../../catalog/components/product-card/product-card.component';
+import { PromotionsBannerComponent } from '../../../../shared/components/promotions-banner/promotions-banner.component';
 
 @Component({
   selector: 'app-landing',
   standalone: true,
-  imports: [CommonModule, RouterLink, ProductCardComponent],
+  imports: [CommonModule, RouterLink, ProductCardComponent, PromotionsBannerComponent],
   template: `
     <div class="landing-page">
+      <!-- [EXAMEN-2] Banner de campaña promocional vigente (ej. Black Fashion November) -->
+      <app-promotions-banner />
       <!-- Hero Section -->
       <section class="hero-section">
         <div class="hero-backdrop"></div>
@@ -335,6 +338,12 @@ import { ProductCardComponent } from '../../../catalog/components/product-card/p
       flex-direction: column;
       gap: 5rem;
       padding-bottom: 5rem;
+    }
+
+    /* [EXAMEN-2] El banner de campaña va pegado al header: cancela el gap
+       de 5rem del flex para que no quede un hueco antes del hero. */
+    .landing-page app-promotions-banner {
+      margin-bottom: -5rem;
     }
 
     /* Hero */

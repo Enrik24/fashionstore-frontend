@@ -39,6 +39,9 @@ import { OfflineSessionService } from '../../../core/offline/offline-session.ser
         @if (!offlineSession.sesionActiva() && connectivity.enLinea()) {
           <a routerLink="/profile/offline" class="banner-action">Configurar modo offline</a>
         }
+        @if (!offlineSession.sesionActiva() && !connectivity.enLinea()) {
+          <a routerLink="/offline/acceso" class="banner-action">Entrar con PIN →</a>
+        }
       </div>
     }
   `,
@@ -55,6 +58,7 @@ import { OfflineSessionService } from '../../../core/offline/offline-session.ser
       font-weight: 600;
     }
     .banner-chip-muted { opacity: 0.8; }
+    .banner-action { font-weight: 800; font-size: 0.75rem; color: #fff; text-decoration: underline; white-space: nowrap; }
   `]
 })
 export class ConnectivityBannerComponent implements OnInit, OnDestroy {

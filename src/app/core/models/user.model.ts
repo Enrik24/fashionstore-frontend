@@ -25,6 +25,8 @@ export interface UserCreateDto {
   telefono?: string;
   contrasena: string;
   estado?: EstadoUsuario;
+  /** [EXAMEN-2] Asignación de sucursal para Encargado/Cajero (crea encargados_sucursal/cajeros). */
+  sucursal_id?: number | null;
 }
 
 export interface UserUpdateDto {

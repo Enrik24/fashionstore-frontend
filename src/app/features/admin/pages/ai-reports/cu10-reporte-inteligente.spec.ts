@@ -1,8 +1,10 @@
 import { TestBed } from '@angular/core/testing';
 import { HttpClientTestingModule, HttpTestingController } from '@angular/common/http/testing';
+import { RouterTestingModule } from '@angular/router/testing';
 import { ReportsService } from '../../../../core/services/reports.service';
 import { AnaliticaApiService } from '../../../../core/services/analitica-api.service';
 import { PlanFeatureService } from '../../../../core/services/plan-feature.service';
+import { AiReportsComponent } from './ai-reports.component';
 import { firstValueFrom, of } from 'rxjs';
 
 /** [EXAMEN-2] CU10: texto, voz, plan bloqueado, ambigua, no soportada, tabla/gráfico. */
@@ -56,5 +58,34 @@ describe('CU10 - Reporte inteligente', () => {
     expect((await h).length).toBe(1);
     expect(planFeature.puedeReportesIA).toBeDefined();
     expect(of(true)).toBeDefined();
+  });
+
+  it('ofrece una acción visible para ver el detalle de cada reporte del historial', () => {
+    planFeature.puedeReportesIA.and.returnValue(true);
+    const apiSpy = jasmine.createSpyObj('AnaliticaApiService', ['plantillas', 'historial']);
+    apiSpy.plantillas.and.returnValue(of([]));
+    apiSpy.historial.and.returnValue(of([{
+      id: 42,
+      prompt_original: 'inventario con bajo stock',
+      estado: 'EJECUTADA',
+      fecha_ejecucion: '2026-11-09T10:00:00Z',
+    }]));
+
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      imports: [AiReportsComponent, RouterTestingModule],
+      providers: [
+        { provide: AnaliticaApiService, useValue: apiSpy },
+        { provide: PlanFeatureService, useValue: planFeature },
+      ],
+    });
+
+    const fixture = TestBed.createComponent(AiReportsComponent);
+    fixture.detectChanges();
+
+    const detalle = fixture.nativeElement.querySelector('.detail-button') as HTMLAnchorElement;
+    expect(detalle).toBeTruthy();
+    expect(detalle.textContent).toContain('Ver detalle');
+    expect(detalle.getAttribute('href')).toContain('/admin/reportes-ia/42');
   });
 });

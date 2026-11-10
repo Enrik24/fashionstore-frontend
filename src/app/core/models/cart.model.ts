@@ -76,6 +76,10 @@ export interface Carrito {
   estado: EstadoCarrito;
   cupon_id?: number;
   descuento_aplicado: number;
+  // [EXAMEN-2] Campaña promocional aplicada automáticamente en el checkout
+  descuento_promocion?: number;
+  promocion_nombre?: string | null;
+  promocion_valor?: number | null;
   items: ItemCarrito[];
   subtotal: number;
   total: number;

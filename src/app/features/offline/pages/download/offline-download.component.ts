@@ -347,16 +347,17 @@ export class OfflineDownloadComponent implements OnInit {
   }
 
   private async cargarEstado(): Promise<void> {
-    const [sello, version, uso, completos] = await Promise.all([
+    // allSettled: si IndexedDB está bloqueada no dejamos "Midiendo…" colgado.
+    const [selloRes, versionRes, usoRes, completosRes] = await Promise.allSettled([
       this.catalog.selloActual(),
       this.catalog.versionLocal(),
       this.quota.medirUso(),
       this.catalog.datosCompletos()
     ]);
-    this.sello.set(sello);
-    this.version.set(version);
-    this.uso.set(uso);
-    this.datosCompletos.set(completos);
+    this.sello.set(selloRes.status === 'fulfilled' ? selloRes.value : null);
+    this.version.set(versionRes.status === 'fulfilled' ? versionRes.value : null);
+    this.uso.set(usoRes.status === 'fulfilled' ? usoRes.value : null);
+    this.datosCompletos.set(completosRes.status === 'fulfilled' ? completosRes.value : false);
   }
 
   private mensajeError(error: unknown): string {

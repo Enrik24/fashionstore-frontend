@@ -1,0 +1,114 @@
+<section class="compensaciones-page">
+  <header class="page-head">
+    <div>
+      <span class="eyebrow"><i class="ri-refund-2-line"></i> CU19 · Compensaciones</span>
+      <h1>Compensaciones de ventas offline</h1>
+      <p>Gestiona los reembolsos generados cuando una venta realizada sin conexión fue rechazada.</p>
+    </div>
+    <button type="button" class="btn btn-outline refresh-button" (click)="cargar()" [disabled]="cargando()">
+      <i class="ri-refresh-line" [class.spin-icon]="cargando()"></i> Actualizar
+    </button>
+  </header>
+
+  <section class="metrics-grid" aria-label="Resumen de compensaciones">
+    <article class="metric-card metric-pending">
+      <span class="metric-icon"><i class="ri-time-line"></i></span>
+      <div><span>Pendientes</span><strong>{{ totalPendientes() }}</strong><small>Requieren atención</small></div>
+    </article>
+    <article class="metric-card metric-amount">
+      <span class="metric-icon"><i class="ri-money-dollar-circle-line"></i></span>
+      <div><span>Monto pendiente</span><strong>Bs. {{ montoPendiente() | number:'1.2-2' }}</strong><small>Por devolver</small></div>
+    </article>
+    <article class="metric-card metric-success">
+      <span class="metric-icon"><i class="ri-check-circle-line"></i></span>
+      <div><span>Completadas</span><strong>{{ totalCompletadas() }}</strong><small>Resueltas</small></div>
+    </article>
+    <article class="metric-card metric-danger">
+      <span class="metric-icon"><i class="ri-error-warning-line"></i></span>
+      <div><span>Fallidas</span><strong>{{ totalFallidas() }}</strong><small>Requieren reintento</small></div>
+    </article>
+  </section>
+
+  <section class="card filters-card">
+    <div class="filter-field">
+      <label class="form-label" for="filtro-estado">Estado</label>
+      <select id="filtro-estado" class="form-control" [(ngModel)]="filtro" (ngModelChange)="cargar()">
+        <option value="">Todos los estados</option>
+        <option value="PENDIENTE">Pendiente</option>
+        <option value="EN_PROCESO">En proceso</option>
+        <option value="COMPLETADA">Completada</option>
+        <option value="FALLIDA">Fallida</option>
+        <option value="NO_APLICA">No aplica</option>
+      </select>
+    </div>
+    <div class="filter-field">
+      <label class="form-label" for="filtro-tipo">Tipo de compensación</label>
+      <select id="filtro-tipo" class="form-control" [(ngModel)]="tipoFiltro">
+        <option value="">Todos los tipos</option>
+        <option value="REEMBOLSO_EFECTIVO">Reembolso en efectivo</option>
+        <option value="REEMBOLSO_TARJETA">Reembolso por tarjeta</option>
+        <option value="NOTA_CREDITO">Nota de crédito</option>
+        <option value="SALDO_FAVOR">Saldo a favor</option>
+      </select>
+    </div>
+    @if (filtro || tipoFiltro) {
+      <button type="button" class="btn btn-outline btn-sm clear-button" (click)="limpiarFiltros()"><i class="ri-close-circle-line"></i> Limpiar filtros</button>
+    }
+  </section>
+
+  <section class="card history-card">
+    <div class="card-heading">
+      <div class="card-icon"><i class="ri-history-line"></i></div>
+      <div><h2>Compensaciones registradas</h2><p>Revisa el estado y ejecuta la acción disponible para cada caso.</p></div>
+      <span class="count-badge">{{ listaVisible().length }}</span>
+    </div>
+
+    @if (cargando()) {
+      <div class="state-message"><i class="ri-loader-4-line spin-icon"></i><span>Cargando compensaciones…</span></div>
+    } @else if (error()) {
+      <div class="state-message state-error"><i class="ri-error-warning-line"></i><span>{{ error() }}</span><button type="button" class="btn btn-outline btn-sm" (click)="cargar()">Reintentar</button></div>
+    } @else if (listaVisible().length === 0) {
+      <div class="state-message state-empty">
+        <div class="empty-icon"><i class="ri-refund-2-line"></i></div>
+        <strong>No hay compensaciones para mostrar</strong>
+        <span>Prueba otra combinación de filtros o espera a que se genere una nueva venta rechazada.</span>
+      </div>
+    } @else {
+      <div class="table-responsive">
+        <table class="table-custom compensation-table">
+          <thead><tr><th>Compensación</th><th>Tipo</th><th>Monto</th><th>Estado</th><th>Fecha</th><th class="text-right">Acción</th></tr></thead>
+          <tbody>
+            @for (c of listaVisible(); track c.id) {
+              <tr>
+                <td><div class="compensation-cell"><span class="row-icon"><i class="ri-receipt-line"></i></span><div><strong>{{ referencia(c) }}</strong><span>ID #{{ c.id }} · Cliente {{ c.notificado_cliente ? 'notificado' : 'sin notificar' }}</span></div></div></td>
+                <td><span class="type-label">{{ etiquetaTipo(c.tipo) }}</span></td>
+                <td class="amount-cell">Bs. {{ c.monto | number:'1.2-2' }}</td>
+                <td><span class="badge" [ngClass]="(c.estado | statusBadge).class">{{ (c.estado | statusBadge).label }}</span></td>
+                <td class="date-cell">{{ c.fecha_creacion | date:'dd/MM/yyyy HH:mm' }}</td>
+                <td class="text-right"><button type="button" class="btn btn-outline btn-sm" (click)="alternarDetalle(c)"><i class="ri-eye-line"></i> Ver detalle</button></td>
+              </tr>
+              @if (detalleAbierto() === c.id) {
+                <tr class="detail-row"><td colspan="6">
+                  <div class="detail-content">
+                    <div><span>Motivo</span><strong>{{ c.motivo || 'No indicado' }}</strong></div>
+                    <div><span>Referencia externa</span><strong>{{ c.referencia_externa || 'No disponible' }}</strong></div>
+                    <div><span>Notificación al cliente</span><strong>{{ c.notificado_cliente ? 'Sí, cliente notificado' : 'No, cliente sin notificar' }}</strong></div>
+                    @if (c.error_detalle) { <div class="error-detail"><span>Detalle del error</span><strong>{{ c.error_detalle }}</strong></div> }
+                    <div class="detail-actions">
+                      @if (c.estado === 'PENDIENTE' && c.tipo === 'REEMBOLSO_EFECTIVO') {
+                        <button type="button" class="btn btn-accent btn-sm" [disabled]="procesandoId() !== null" (click)="confirmar(c)">@if (procesandoId() === c.id) { <i class="ri-loader-4-line spin-icon"></i> Confirmando… } @else { <i class="ri-check-line"></i> Confirmar efectivo }</button>
+                      }
+                      @if ((c.estado === 'PENDIENTE' || c.estado === 'FALLIDA') && c.tipo !== 'REEMBOLSO_EFECTIVO') {
+                        <button type="button" class="btn btn-outline btn-sm" [disabled]="procesandoId() !== null" (click)="reintentar(c)">@if (procesandoId() === c.id) { <i class="ri-loader-4-line spin-icon"></i> Reintentando… } @else { <i class="ri-refresh-line"></i> Reintentar pasarela }</button>
+                      }
+                    </div>
+                  </div>
+                </td></tr>
+              }
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </section>
+</section>

@@ -5,6 +5,7 @@ import { FormsModule } from '@angular/forms';
 import { provideCharts, withDefaultRegisterables } from 'ng2-charts';
 import { BranchApiService } from '../../../../core/services/branch-api.service';
 import { ReportsService } from '../../../../core/services/reports.service';
+import { AuthService } from '../../../../core/services/auth.service';
 import { DashboardService, DashboardVm } from '../../../../core/services/dashboard.service';
 import { ToastService } from '../../../../core/services/toast.service';
 import { DashboardFilters, KpiConfig, RangePreset, WidgetStatus } from '../../../../core/models/dashboard.model';
@@ -48,7 +49,7 @@ import { rangeFor } from '../../../../core/utils/date-range.util';
         <button class="btn btn-outline btn-sm" (click)="snapshot()">Guardar snapshot</button>
       </div>
 
-      <app-dashboard-filters [value]="filters()" [sucursales]="sucursales()" (changed)="onFilters($event)" />
+      <app-dashboard-filters [value]="filters()" [sucursales]="sucursales()" (changed)="onFilters($event)" [sucursalFija]="sucursalFija()" />
 
       @if (score()) {
         <div class="card score-card" [ngClass]="'tone-' + score()!.tono">
@@ -73,17 +74,49 @@ import { rangeFor } from '../../../../core/utils/date-range.util';
       }
 
       <section class="grid grid-cols-2 dashboard-charts">
-        <app-chart-card title="Comparativa de períodos" icon="ri-line-chart-line" [type]="vm()?.comparativa?.type ?? 'bar'"
-          [data]="vm()?.comparativa?.data ?? {labels:[],datasets:[]}" [options]="vm()?.comparativa?.options ?? {}"
-          [status]="chartStatus('ventas')" (retry)="loadDashboard()" />
-        <app-chart-card title="Top productos más vendidos" icon="ri-trophy-line" [type]="vm()?.topProductos?.type ?? 'bar'"
+        <div class="card comparativa-card">
+          <h3 class="card-subtitle"><i class="ri-line-chart-line text-primary"></i> Comparativa de períodos</h3>
+          @if ((vm()?.comparativa?.length ?? 0) > 0) {
+            <div class="comparativa-grid">
+              @for (c of vm()!.comparativa; track c.label) {
+                <div class="comparativa-item">
+                  <span class="comparativa-label">{{ c.label }}</span>
+                  <div class="comparativa-valores">
+                    <span class="comparativa-actual">
+                      {{ c.monetario ? 'Bs. ' + (c.actual | number:'1.0-0') : (c.actual | number:'1.0-0') }}
+                    </span>
+                    <span class="comparativa-anterior">
+                      vs {{ c.monetario ? 'Bs. ' : '' }}{{ c.anterior !== null ? (c.anterior | number:'1.0-0') : '—' }}
+                    </span>
+                  </div>
+                  @if (c.deltaPct !== null) {
+                    <span class="comparativa-delta" [ngClass]="c.deltaPct >= 0 ? 'delta-up' : 'delta-down'">
+                      <i class="ri-{{ c.deltaPct >= 0 ? 'arrow-up' : 'arrow-down' }}-line"></i>
+                      {{ (c.deltaPct | number:'1.0-1') }}%
+                    </span>
+                  } @else {
+                    <span class="comparativa-delta delta-neutral">s/ período anterior</span>
+                  }
+                </div>
+              }
+            </div>
+          } @else {
+            <p class="text-muted">Activa "Comparar con período anterior" en los filtros para ver la comparación.</p>
+          }
+        </div>
+        <app-chart-card title="Top 5 prendas más vendidas" icon="ri-trophy-line" [type]="vm()?.topProductos?.type ?? 'bar'"
           [data]="vm()?.topProductos?.data ?? {labels:[],datasets:[]}" [options]="vm()?.topProductos?.options ?? {}"
           [status]="chartStatus('ventas')" (retry)="loadDashboard()" />
       </section>
-      <section class="grid grid-cols-3 dashboard-charts">
+      <section class="grid grid-cols-2 dashboard-charts">
+        <app-chart-card title="Top 5 prendas repuestas" icon="ri-recycle-line" [type]="vm()?.topRepuestas?.type ?? 'bar'"
+          [data]="vm()?.topRepuestas?.data ?? {labels:[],datasets:[]}" [options]="vm()?.topRepuestas?.options ?? {}"
+          [status]="chartStatus('repuestas')" (retry)="loadDashboard()" />
         <app-chart-card title="Mix de canal" icon="ri-pie-chart-line" [type]="'doughnut'"
           [data]="vm()?.mixCanal?.data ?? {labels:[],datasets:[]}" [options]="vm()?.mixCanal?.options ?? {}"
           [status]="chartStatus('ventas')" (retry)="loadDashboard()" />
+      </section>
+      <section class="grid grid-cols-2 dashboard-charts">
         <app-chart-card title="Reservas por estado" icon="ri-calendar-check-line" [type]="'bar'"
           [data]="vm()?.reservasPorEstado?.data ?? {labels:[],datasets:[]}" [options]="vm()?.reservasPorEstado?.options ?? {}"
           [status]="chartStatus('reservas')" (retry)="loadDashboard()" />
@@ -107,6 +140,19 @@ import { rangeFor } from '../../../../core/utils/date-range.util';
     @keyframes shimmer { 0% { background-position: 100% 0; } 100% { background-position: 0 0; } }
     .dashboard-charts { gap: 1.25rem; }
     .score-card { padding: 1rem 1.25rem; display: flex; gap: 1rem; align-items: center; }
+    /* [EXAMEN-2] Comparativa de períodos: mini-cards Actual vs Anterior + Δ% */
+    .comparativa-card { padding: 1.25rem; display: flex; flex-direction: column; gap: 1rem; }
+    .comparativa-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: .9rem; }
+    .comparativa-item { background: #fafbfd; border: 1px solid var(--border-light); border-radius: var(--radius-md); padding: .8rem 1rem; display: flex; flex-direction: column; gap: .3rem; }
+    .comparativa-label { font-size: .78rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: .3px; }
+    .comparativa-valores { display: flex; align-items: baseline; gap: .5rem; flex-wrap: wrap; }
+    .comparativa-actual { font-size: 1.25rem; font-weight: 800; color: var(--text); }
+    .comparativa-anterior { font-size: .78rem; color: var(--text-muted); }
+    .comparativa-delta { font-size: .8rem; font-weight: 700; display: inline-flex; align-items: center; gap: .15rem; width: fit-content; padding: .15rem .5rem; border-radius: 999px; }
+    .delta-up { color: #047857; background: rgba(16, 185, 129, .12); }
+    .delta-down { color: #b91c1c; background: rgba(239, 68, 68, .12); }
+    .delta-neutral { color: var(--text-muted); background: var(--border-light); }
+    @media (max-width: 768px) { .comparativa-grid { grid-template-columns: 1fr; } }
     .tone-success { border-left: 4px solid var(--success); } .tone-warning { border-left: 4px solid var(--warning); } .tone-error { border-left: 4px solid var(--error); }
     .hint { font-size: .75rem; color: var(--text-muted); }
     .error-banner { padding: 1rem 1.25rem; display: flex; gap: .75rem; align-items: center; border-left: 4px solid var(--error); }
@@ -122,6 +168,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   private branchApi = inject(BranchApiService);
   private reports = inject(ReportsService);
   private toast = inject(ToastService);
+  private auth = inject(AuthService);
   private destroyRef = inject(DestroyRef);
 
   readonly filters = signal<DashboardFilters>({ preset: '30d', ...rangeFor('30d'), comparar: true });
@@ -134,6 +181,11 @@ export class DashboardComponent implements OnInit, OnDestroy {
   readonly refreshOpt: number = 300000;
   private timer: any = null;
 
+  /** [EXAMEN-2] Encargado: KPIs fijo a su sucursal asignada; Administrador: todas. */
+  readonly sucursalFija = computed<number | null>(() => {
+    return this.auth.isEncargado() ? (this.auth.userSucursalId() ?? null) : null;
+  });
+
   readonly kpiCards = computed<KpiConfig[]>(() => this.vm()?.kpiCards ?? []);
   readonly score = computed(() => this.vm()?.score ?? null);
   readonly lastUpdatedLabel = computed(() => {
@@ -144,6 +196,11 @@ export class DashboardComponent implements OnInit, OnDestroy {
   });
 
   ngOnInit(): void {
+    // [EXAMEN-2] Encargado: sus KPIs se calculan SIEMPRE para su sucursal.
+    const fija = this.sucursalFija();
+    if (fija !== null) {
+      this.filters.update(f => ({ ...f, sucursalId: fija }));
+    }
     this.branchApi.getBranches(0, 500).subscribe({ next: s => this.sucursales.set(s ?? []), error: () => {} });
     this.loadDashboard();
     this.startAutoRefresh(this.refreshOpt);
@@ -153,6 +210,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void { clearInterval(this.timer); }
 
   onFilters(f: DashboardFilters): void {
+    // Encargado: la sucursal no se puede cambiar (el backend también lo fuerza)
+    if (this.sucursalFija() !== null) f = { ...f, sucursalId: this.sucursalFija()! };
     const days = Math.round((new Date(f.fechaFin).getTime() - new Date(f.fechaInicio).getTime()) / 86400000) + 1;
     if (days > 366) { this.toast.warning('Rango limitado a 366 días', 'Filtros'); return; }
     this.filters.set(f);

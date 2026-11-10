@@ -128,11 +128,16 @@ import {
                 }
               </div>
 
-              @if (solicitud.nota_devolucion_url || solicitud.nota_reposicion_url) {
-                <div class="res-notes">
-                  <span><b>Notas:</b> devolución {{ solicitud.nota_devolucion_url || '—' }} · reposición {{ solicitud.nota_reposicion_url || '—' }}{{ solicitud.numero_reposicion ? ' · ' + solicitud.numero_reposicion : '' }}</span>
-                </div>
-              }
+              <div class="res-notes">
+                <button class="btn btn-outline btn-sm" [disabled]="descargandoNota === solicitud.id" (click)="descargarNotaPdf(solicitud)">
+                  @if (descargandoNota === solicitud.id) {
+                    <i class="ri-loader-4-line spin-icon"></i> Generando nota...
+                  } @else {
+                    <i class="ri-file-pdf-line"></i>
+                    @if (solicitud.tipo === 'REPOSICION') { Nota de reposición (PDF) } @else { Nota de devolución (PDF) }
+                  }
+                </button>
+              </div>
 
               @if (solicitud.observaciones_staff) {
                 <div class="res-notes">
@@ -363,6 +368,32 @@ export class BranchReturnsComponent implements OnInit {
 
   // Acciones
   public procesandoReembolso: number | null = null;
+
+  /** [EXAMEN-2] CU13/CU18: descarga del PDF de la Nota de Devolución/Reposición (generación on-demand). */
+  public descargandoNota: number | null = null;
+
+  descargarNotaPdf(solicitud: SolicitudDevolucion): void {
+    const esReposicion = solicitud.tipo === 'REPOSICION';
+    this.descargandoNota = solicitud.id;
+    (esReposicion
+      ? this.returnsApi.descargarNotaReposicion(solicitud.id)
+      : this.returnsApi.descargarNota(solicitud.id)
+    ).subscribe({
+      next: (blob) => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${esReposicion ? 'nota-reposicion' : 'nota-devolucion'}-${solicitud.id}.pdf`;
+        a.click();
+        URL.revokeObjectURL(url);
+        this.descargandoNota = null;
+      },
+      error: () => {
+        this.descargandoNota = null;
+        this.toast.error('No se pudo generar la nota en PDF.');
+      }
+    });
+  }
 
   ngOnInit(): void {
     this.cargarSolicitudes();

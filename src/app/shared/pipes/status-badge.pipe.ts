@@ -121,7 +121,9 @@ export class StatusBadgePipe implements PipeTransform {
 
       // [EXAMEN-2] CU10/CU12/CU14/CU19/CU20/RN-024
       case 'PROCESANDO': return { label: 'Procesando', class: 'badge-info' };
-      case 'COMPLETADA': return { label: 'Completada', class: 'badge-synced' };
+      case 'COMPLETADA':
+      case 'EJECUTADA': return { label: 'Completada', class: 'badge-synced' };
+      case 'INTERPRETADA': return { label: 'Interpretada', class: 'badge-info' };
       case 'AMBIGUA': return { label: 'Ambigua', class: 'badge-warning' };
       case 'NO_SOPORTADA': return { label: 'No soportada', class: 'badge-danger' };
       case 'BLOQUEADA_POR_PLAN': return { label: 'Bloqueada por plan', class: 'badge-locked' };
@@ -133,6 +135,7 @@ export class StatusBadgePipe implements PipeTransform {
       case 'SOLICITADA': return { label: 'Solicitada', class: 'badge-pending' };
       case 'ENVIADA': return { label: 'Enviada', class: 'badge-synced' };
       case 'FALLIDA': return { label: 'Fallida', class: 'badge-danger' };
+      case 'NO_APLICA': return { label: 'No aplica', class: 'badge-primary' };
       case 'LEIDA': return { label: 'Leída', class: 'badge-offline' };
 
       default:

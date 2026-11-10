@@ -20,4 +20,22 @@ describe('TraspasosApiService', () => {
     httpMock.expectOne((r) => r.url.includes('/sugerencias')).flush([]);
     expect((await s).length).toBe(0);
   });
+  it('desenvuelve sugerencias e historial estructurado del backend', async () => {
+    const s = firstValueFrom(svc.sugerencias());
+    httpMock.expectOne((r) => r.url.includes('/sugerencias')).flush({
+      sugerencias: [{ variante_producto_id: 1, sucursal_origen_id: 1, sucursal_destino_id: 2 }],
+    });
+    expect((await s).length).toBe(1);
+
+    const h = firstValueFrom(svc.historialProducto(8));
+    httpMock.expectOne((r) => r.url.includes('/producto/8')).flush({
+      producto_id: 8,
+      producto: 'Camisa',
+      total_movimientos: 1,
+      movimientos: [{ traspaso_id: 1, numero: 'T-1', estado: 'EN_TRANSITO', sucursal_origen_id: 1, sucursal_destino_id: 2, variante_producto_id: 1, cantidad: 2 }],
+    });
+    const historial = await h;
+    expect(historial.producto).toBe('Camisa');
+    expect(historial.movimientos.length).toBe(1);
+  });
 });

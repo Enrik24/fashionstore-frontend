@@ -1,0 +1,226 @@
+<section class="ai-reports-page">
+  <header class="page-head">
+    <div>
+      <span class="eyebrow"><i class="ri-sparkling-2-line"></i> CU10 · Reportes IA</span>
+      <h1>Reportes con lenguaje natural</h1>
+      <p>Convierte una consulta en palabras en un reporte listo para analizar, compartir y exportar.</p>
+    </div>
+  </header>
+
+  <app-plan-feature-lock funcionalidad="reportes_ia" titulo="Reportes IA no incluidos en tu plan">
+    <section class="card composer-card">
+      <div class="card-heading">
+        <div class="card-icon"><i class="ri-edit-box-line"></i></div>
+        <div>
+          <h2>Crear un reporte</h2>
+          <p>Describe qué necesitas consultar. Por ejemplo: “ventas de septiembre por sucursal”.</p>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="prompt">Tu solicitud</label>
+        <textarea
+          id="prompt"
+          class="form-control prompt-input"
+          [(ngModel)]="prompt"
+          rows="4"
+          maxlength="2000"
+          placeholder="Ejemplo: ventas de septiembre por sucursal"
+        ></textarea>
+        <span class="form-hint">
+          @if (grabando()) {
+            @if (textoParcial()) {
+              <span class="voice-live"><i class="ri-mic-fill"></i> “{{ textoParcial() }}”</span>
+            } @else {
+              <span class="voice-live voice-live-waiting"><i class="ri-mic-fill"></i> Habla ahora… escuchando tu voz</span>
+            }
+          } @else {
+            {{ prompt.length }}/2000 caracteres
+          }
+        </span>
+      </div>
+
+      <div class="composer-actions">
+        <button
+          type="button"
+          class="btn btn-outline dictar-button"
+          [class.recording]="grabando()"
+          [class.processing]="procesando() || cargando()"
+          [class.unsupported]="!soportado()"
+          [attr.aria-live]="'polite'"
+          [title]="
+            grabando()
+              ? 'Grabando… haz clic de nuevo para detener'
+              : !soportado()
+                ? 'Tu navegador no soporta dictado por voz (usa Chrome, Edge o Safari)'
+                : 'Dicta tu solicitud con el micrófono'
+          "
+          (click)="dictar()"
+        >
+          @if (grabando()) {
+            <span class="mic-pulse"><i class="ri-mic-fill"></i></span>
+            Escuchando… toca para <strong>detener</strong>
+            <span class="mic-timer">máx. 15 s</span>
+          } @else if (procesando() || cargando()) {
+            <i class="ri-loader-4-line spin-icon"></i>
+            Procesando…
+          } @else {
+            <i class="ri-mic-line"></i>
+            Dictar por voz
+          }
+        </button>
+        <button
+          type="button"
+          class="btn btn-accent generate-button"
+          [disabled]="cargando() || !prompt.trim()"
+          (click)="generar()"
+        >
+          @if (cargando()) {
+            <i class="ri-loader-4-line spin-icon"></i> Generando reporte…
+          } @else {
+            <i class="ri-magic-line"></i> Generar reporte
+          }
+        </button>
+      </div>
+
+      <div class="suggestions">
+        <div class="suggestion-block">
+          <span class="suggestion-label"><i class="ri-lightbulb-line"></i> Usa un ejemplo</span>
+          <div class="chip-list">
+            @for (ejemplo of ejemplos; track ejemplo) {
+              <button type="button" class="chip" (click)="prompt = ejemplo">{{ ejemplo }}</button>
+            }
+          </div>
+        </div>
+
+        @if (plantillas().length) {
+          <div class="suggestion-block">
+            <span class="suggestion-label"><i class="ri-layout-grid-line"></i> Plantillas disponibles</span>
+            <div class="chip-list">
+              @for (plantilla of plantillas(); track plantilla.nombre) {
+                <button
+                  type="button"
+                  class="chip chip-template"
+                  (click)="prompt = plantilla.ejemplo_prompt || plantilla.nombre"
+                >
+                  {{ plantilla.nombre }}
+                </button>
+              }
+            </div>
+          </div>
+        }
+      </div>
+    </section>
+
+    @if (resultado(); as reporte) {
+      <section class="card result-card">
+        <div class="result-icon"><i class="ri-check-line"></i></div>
+        <div class="result-content">
+          <div class="result-title-row">
+            <h2>Tu reporte está listo</h2>
+            <span class="badge" [ngClass]="(reporte.estado | statusBadge).class">
+              {{ (reporte.estado | statusBadge).label }}
+            </span>
+          </div>
+          <p class="result-prompt">“{{ reporte.prompt_original }}”</p>
+          @if (reporte.preguntas_aclaracion?.length) {
+            <div class="notice notice-warning">
+              <strong>¿Puedes aclarar?</strong>
+              @for (pregunta of reporte.preguntas_aclaracion; track pregunta) {
+                <p>{{ pregunta }}</p>
+              }
+            </div>
+          }
+          @if (reporte.error_detalle) {
+            <div class="notice notice-error">{{ reporte.error_detalle }}</div>
+          }
+          @if (reporte.id != null) {
+            <a class="btn btn-accent" [routerLink]="['/admin/reportes-ia', reporte.id]">
+              <i class="ri-file-list-3-line"></i> Ver detalle del reporte
+            </a>
+          }
+        </div>
+      </section>
+    }
+
+    <section class="card history-card">
+      <div class="card-heading history-heading">
+        <div class="card-icon"><i class="ri-history-line"></i></div>
+        <div>
+          <h2>Reportes generados</h2>
+          <p>Consulta o abre el detalle de cada reporte generado anteriormente.</p>
+        </div>
+        <span class="count-badge">{{ historial().length }}</span>
+      </div>
+
+      @if (cargandoHistorial()) {
+        <div class="state-message">
+          <i class="ri-loader-4-line spin-icon"></i>
+          <span>Cargando historial de reportes…</span>
+        </div>
+      } @else if (errorHistorial()) {
+        <div class="state-message state-error">
+          <i class="ri-error-warning-line"></i>
+          <span>{{ errorHistorial() }}</span>
+        </div>
+      } @else if (historial().length === 0) {
+        <div class="state-message state-empty">
+          <div class="empty-icon"><i class="ri-file-list-3-line"></i></div>
+          <strong>Aún no hay reportes</strong>
+          <span>Genera tu primer reporte usando el formulario anterior.</span>
+        </div>
+      } @else {
+        <div class="table-responsive">
+          <table class="table-custom report-history-table">
+            <thead>
+              <tr>
+                <th>Reporte</th>
+                <th>Estado</th>
+                <th>Fecha y hora</th>
+                <th class="text-right">Acción</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (reporte of historial(); track reporte.id) {
+                <tr>
+                  <td>
+                    <div class="report-cell">
+                      <span class="report-row-icon"><i class="ri-file-chart-line"></i></span>
+                      <div>
+                        <strong>{{ reporte.prompt_original || 'Reporte sin descripción' }}</strong>
+                        <span>Reporte #{{ reporte.id }}</span>
+                      </div>
+                    </div>
+                  </td>
+                  <td>
+                    <span class="badge" [ngClass]="(reporte.estado | statusBadge).class">
+                      {{ (reporte.estado | statusBadge).label }}
+                    </span>
+                  </td>
+                  <td class="date-cell">
+                    @if (reporte.fecha_ejecucion) {
+                      {{ reporte.fecha_ejecucion | date:'dd/MM/yyyy HH:mm' }}
+                    } @else {
+                      Sin fecha
+                    }
+                  </td>
+                  <td class="text-right">
+                    @if (reporte.id != null) {
+                      <a
+                        class="btn btn-outline btn-sm detail-button"
+                        [routerLink]="['/admin/reportes-ia', reporte.id]"
+                        [attr.aria-label]="'Ver detalle del reporte ' + reporte.id"
+                      >
+                        <i class="ri-eye-line"></i> Ver detalle
+                      </a>
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </section>
+  </app-plan-feature-lock>
+</section>

@@ -24,4 +24,25 @@ export interface Compensacion {
   fecha_resolucion?: string | null;
   resuelto_por?: string | null;
 }
-export interface ResumenCompensaciones { pendientes?: number; en_proceso?: number; completadas?: number; fallidas?: number; monto_pendiente?: number; monto_completado?: number; total_pendiente?: number; total_completado?: number; por_tipo?: Record<string, number>; }
+export interface ResumenCompensacionEstado {
+  cantidad: number;
+  monto: number;
+}
+
+/**
+ * El backend entrega el resumen agrupado por estado y por tipo. Se conservan
+ * también los campos planos para mantener compatibilidad con respuestas
+ * anteriores y con los dobles de prueba.
+ */
+export interface ResumenCompensaciones {
+  pendientes?: number;
+  en_proceso?: number;
+  completadas?: number;
+  fallidas?: number;
+  monto_pendiente?: number;
+  monto_completado?: number;
+  total_pendiente?: number;
+  total_completado?: number;
+  por_estado?: Record<string, ResumenCompensacionEstado>;
+  por_tipo?: Record<string, ResumenCompensacionEstado | number>;
+}

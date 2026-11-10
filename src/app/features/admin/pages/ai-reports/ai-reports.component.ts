@@ -1,9 +1,8 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { AnaliticaApiService } from '../../../../core/services/analitica-api.service';
-import { ReportsService } from '../../../../core/services/reports.service';
 import { VoiceReportService } from '../../../../core/services/voice-report.service';
 import { PlanFeatureService } from '../../../../core/services/plan-feature.service';
 import { PlanFeatureLockComponent } from '../../../../shared/components/plan-feature-lock/plan-feature-lock.component';
@@ -17,52 +16,128 @@ import { SolicitudReporteIA, PlantillaReporte } from '../../../../core/models/an
   selector: 'app-ai-reports',
   standalone: true,
   imports: [CommonModule, FormsModule, RouterLink, PlanFeatureLockComponent, StatusBadgePipe],
-  template: `
-    <section>
-      <header><span class="eyebrow">CU10 · Reportes IA</span><h1>Reportes con lenguaje natural</h1><p>Pide ventas por sucursal, compara periodos o consulta inventarios en palabras.</p></header>
-      <app-plan-feature-lock funcionalidad="reportes_ia" titulo="Reportes IA no incluidos en tu plan">
-        <div class="card">
-          <label for="prompt">Tu solicitud</label>
-          <textarea id="prompt" [(ngModel)]="prompt" rows="3" placeholder="Ejemplo: ventas de septiembre por sucursal"></textarea>
-          <div class="acciones">
-            <button type="button" class="btn btn-outline btn-sm" (click)="dictar()"><i class="ri-mic-line"></i> Micrófono</button>
-            <button type="button" class="btn btn-accent btn-sm" [disabled]="cargando() || !prompt.trim()" (click)="generar()">{{ cargando() ? 'Generando…' : 'Generar reporte' }}</button>
-          </div>
-          <div class="ejemplos"><span>Ejemplos:</span> @for (e of ejemplos; track e) { <button type="button" class="chip" (click)="prompt = e">{{ e }}</button> }</div>
-          <div class="plantillas"><span>Plantillas:</span> @for (p of plantillas(); track p.nombre) { <button type="button" class="chip" (click)="prompt = p.ejemplo_prompt || p.nombre">{{ p.nombre }}</button> }</div>
-          @if (resultado(); as r) {
-            <div class="resultado">
-              <h2>Resultado</h2>
-              <span class="badge" [ngClass]="(r.estado | statusBadge).class">{{ (r.estado | statusBadge).label }}</span>
-              <span>Generado en {{ r.tiempo_ms ?? 0 }} ms</span>
-              @if (r.preguntas_aclaracion?.length) { <div class="aviso"><strong>¿Puedes aclarar?</strong> @for (p of r.preguntas_aclaracion; track p) { <p>{{ p }}</p> } </div> }
-              @if (r.error_detalle) { <p class="error">{{ r.error_detalle }}</p> }
-              <a class="btn btn-outline btn-sm" [routerLink]="['/admin/reportes-ia', r.id]">Ver detalle y exportar</a>
-            </div>
-          }
-        </div>
-        <div class="card">
-          <h2>Historial</h2>
-          @for (h of historial(); track h.id) { <div class="fila"><a [routerLink]="['/admin/reportes-ia', h.id]">“{{ h.prompt_original }}”</a><span>{{ h.estado }}</span><span>{{ h.fecha_ejecucion }}</span></div> } @empty { <p>Sin solicitudes.</p> }
-        </div>
-      </app-plan-feature-lock>
-    </section>
-  `,
-  styles: [`textarea{width:100%} .card{background:#fff;border:1px solid var(--border-color);border-radius:12px;padding:1rem;margin:.8rem 0} .chip{border:1px solid var(--border-color);border-radius:9999px;padding:.15rem .5rem;background:#f8fafc} .acciones{display:flex;gap:.5rem;margin-top:.5rem} .fila{display:flex;gap:.8rem;border-top:1px solid #eee;padding:.4rem 0} .aviso{background:#fffbeb;border:1px solid #fcd34d;padding:.5rem} .error{color:#991b1b}`]
+  templateUrl: './ai-reports.component.html',
+  styleUrls: ['./ai-reports.component.scss'],
 })
 export class AiReportsComponent implements OnInit {
   private api = inject(AnaliticaApiService);
-  private reports = inject(ReportsService);
   private voice = inject(VoiceReportService);
   planFeature = inject(PlanFeatureService);
+
   prompt = '';
-  ejemplos = ['ventas de septiembre por sucursal', 'inventario con bajo stock', 'clientes que más compran'];
+  ejemplos = [
+    'ventas de septiembre por sucursal',
+    'inventario con bajo stock',
+    'clientes que más compran',
+  ];
+
   cargando = signal(false);
+  cargandoHistorial = signal(false);
+  errorHistorial = signal('');
   resultado = signal<SolicitudReporteIA | null>(null);
   historial = signal<SolicitudReporteIA[]>([]);
   plantillas = signal<PlantillaReporte[]>([]);
-  permite(): boolean { return this.planFeature.puedeReportesIA(); }
-  ngOnInit(): void { if (!this.permite()) return; this.api.plantillas().subscribe({ next: (x) => this.plantillas.set(x), error: () => undefined }); this.api.historial().subscribe({ next: (x) => this.historial.set(x), error: () => undefined }); }
-  dictar(): void { this.voice.solicitarPorVoz((t) => { this.prompt = t; this.generar(); }, (_c, m) => { this.resultado.set({ prompt_original: this.prompt, estado: 'ERROR', error_detalle: m } as SolicitudReporteIA); }); }
-  generar(): void { if (!this.permite() || !this.prompt.trim()) return; this.cargando.set(true); this.reports.solicitarPorTexto(this.prompt).subscribe({ next: (r) => { this.resultado.set(r); this.cargando.set(false); }, error: () => { this.cargando.set(false); this.resultado.set({ prompt_original: this.prompt, estado: 'ERROR', error_detalle: 'No se pudo generar el reporte.' } as SolicitudReporteIA); } }); }
+
+  permite(): boolean {
+    return this.planFeature.puedeReportesIA();
+  }
+
+  // ===== Estados visibles del dictado por voz (UX) =====
+  grabando = computed(() => this.voice.isRecording());
+  procesando = computed(() => this.voice.isProcessing());
+  soportado = computed(() => this.voice.isSupported());
+  /** Texto parcial que el navegador reconoce mientras el usuario habla. */
+  textoParcial = signal('');
+
+  ngOnInit(): void {
+    if (!this.permite()) return;
+    this.cargarPlantillas();
+    this.cargarHistorial();
+  }
+
+  dictar(): void {
+    // Clic mientras ya está escuchando = detener y usar lo dicho hasta ahora.
+    if (this.voice.isRecording()) {
+      this.voice.stopVoice();
+      return;
+    }
+    if (this.cargando() || this.procesando()) return;
+
+    if (!this.voice.isSupported()) {
+      this.resultado.set({
+        prompt_original: this.prompt,
+        estado: 'ERROR',
+        error_detalle:
+          'Este navegador no soporta dictado por voz nativo. '
+          + 'Usa Chrome, Edge o Safari, o escribe el comando en el cuadro de texto.',
+      } as SolicitudReporteIA);
+      return;
+    }
+
+    this.textoParcial.set('');
+    this.voice.solicitarPorVoz(
+      (texto) => {
+        this.prompt = texto;
+        this.textoParcial.set('');
+        this.generar();
+      },
+      (_codigo, mensaje) => {
+        this.textoParcial.set('');
+        this.resultado.set({
+          prompt_original: this.prompt,
+          estado: 'ERROR',
+          error_detalle: mensaje,
+        } as SolicitudReporteIA);
+      },
+      'es-BO',
+      (parcial) => this.textoParcial.set(parcial),
+    );
+  }
+
+  generar(): void {
+    if (!this.permite() || !this.prompt.trim() || this.cargando()) return;
+
+    this.cargando.set(true);
+    this.api.solicitar({ prompt: this.prompt, origen: 'TEXTO' }).subscribe({
+      next: (reporte) => {
+        this.resultado.set({
+          ...reporte,
+          prompt_original: reporte.prompt_original || this.prompt,
+        });
+        this.cargando.set(false);
+        this.cargarHistorial();
+      },
+      error: () => {
+        this.cargando.set(false);
+        this.resultado.set({
+          prompt_original: this.prompt,
+          estado: 'ERROR',
+          error_detalle: 'No se pudo generar el reporte. Intenta nuevamente.',
+        } as SolicitudReporteIA);
+      },
+    });
+  }
+
+  private cargarHistorial(): void {
+    this.cargandoHistorial.set(true);
+    this.errorHistorial.set('');
+    this.api.historial().subscribe({
+      next: (reportes) => {
+        this.historial.set(Array.isArray(reportes) ? reportes : []);
+        this.cargandoHistorial.set(false);
+      },
+      error: () => {
+        this.historial.set([]);
+        this.errorHistorial.set('No se pudo cargar el historial de reportes.');
+        this.cargandoHistorial.set(false);
+      },
+    });
+  }
+
+  private cargarPlantillas(): void {
+    this.api.plantillas().subscribe({
+      next: (plantillas) => this.plantillas.set(Array.isArray(plantillas) ? plantillas : []),
+      error: () => this.plantillas.set([]),
+    });
+  }
 }

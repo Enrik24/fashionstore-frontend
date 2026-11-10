@@ -28,7 +28,7 @@ const ALMACENES: DefinicionAlmacen[] = [
   ] },
   { nombre: 'stock', clave: 'clave', indices: [
     { nombre: 'sucursal_id', campo: 'sucursal_id' },
-    { nombre: 'variante_id', campo: 'variante_id' }
+    { nombre: 'variante_producto_id', campo: 'variante_producto_id' }
   ] },
   { nombre: 'clientes', clave: 'id', indices: [
     { nombre: 'tenant_id', campo: 'tenant_id' },
@@ -84,29 +84,56 @@ export class IndexedDbService {
     }
 
     this.dbPromise = new Promise<IDBDatabase>((resolve, reject) => {
-      const solicitud = indexedDB.open(this.dbNombre, this.dbVersion);
+      const intentar = () => {
+        const solicitud = indexedDB.open(this.dbNombre, this.dbVersion);
 
-      solicitud.onupgradeneeded = () => {
-        const db = solicitud.result;
-        for (const definicion of ALMACENES) {
-          const store = db.objectStoreNames.contains(definicion.nombre)
-            ? solicitud.transaction!.objectStore(definicion.nombre)
-            : db.createObjectStore(definicion.nombre, {
-                keyPath: definicion.clave,
-                autoIncrement: definicion.autoIncremento === true
-              });
+        solicitud.onupgradeneeded = () => {
+          const db = solicitud.result;
+          for (const definicion of ALMACENES) {
+            const store = db.objectStoreNames.contains(definicion.nombre)
+              ? solicitud.transaction!.objectStore(definicion.nombre)
+              : db.createObjectStore(definicion.nombre, {
+                  keyPath: definicion.clave,
+                  autoIncrement: definicion.autoIncremento === true
+                });
 
-          for (const indice of definicion.indices ?? []) {
-            if (!store.indexNames.contains(indice.nombre)) {
-              store.createIndex(indice.nombre, indice.campo, { unique: false });
+            for (const indice of definicion.indices ?? []) {
+              if (!store.indexNames.contains(indice.nombre)) {
+                store.createIndex(indice.nombre, indice.campo, { unique: false });
+              }
             }
           }
-        }
-      };
+        };
 
-      solicitud.onsuccess = () => resolve(solicitud.result);
-      solicitud.onerror = () => reject(solicitud.error ?? new Error('No se pudo abrir IndexedDB.'));
-      solicitud.onblocked = () => reject(new Error('IndexedDB está bloqueada por otra pestaña.'));
+        solicitud.onsuccess = () => {
+          const db = solicitud.result;
+          // Permite que otra pestaña suba la versión sin quedar bloqueada.
+          db.onversionchange = () => db.close();
+          resolve(db);
+        };
+        solicitud.onerror = () => {
+          this.dbPromise = null;
+          // Si quedó en v2 por un intento previo y ahora pedimos v1,
+          // borra y reabre una sola vez en vez de dejar el spinner colgado.
+          if (solicitud.error?.name === 'VersionError') {
+            console.warn('IndexedDB en versión superior, recreando base local…');
+            const borrado = indexedDB.deleteDatabase(this.dbNombre);
+            borrado.onsuccess = () => {
+              this.dbPromise = null;
+              resolve(this.abrir());
+            };
+            borrado.onerror = () => reject(solicitud.error);
+            borrado.onblocked = () => reject(new Error('Cierra las demás pestañas de FashionStore y recarga.'));
+            return;
+          }
+          reject(solicitud.error ?? new Error('No se pudo abrir IndexedDB.'));
+        };
+        solicitud.onblocked = () => {
+          // No rechazar: la petición sigue en espera hasta que la otra pestaña cierre.
+          console.warn('IndexedDB bloqueada por otra pestaña, esperando…');
+        };
+      };
+      intentar();
     });
 
     return this.dbPromise;

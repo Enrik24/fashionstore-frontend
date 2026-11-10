@@ -75,7 +75,7 @@ interface VarianteConStock {
               <article class="card producto-card" (click)="seleccionar(producto)">
                 <div class="producto-imagen">
                   @if (imagen(producto); as src) {
-                    <img [src]="src" [alt]="producto.nombre" loading="lazy" />
+                    <img [src]="src" [alt]="producto.nombre" loading="lazy" (error)="marcarImagenError(producto.id)" />
                   } @else {
                     <i class="ri-t-shirt-2-line"></i>
                   }
@@ -197,6 +197,7 @@ export class OfflineCatalogComponent implements OnInit {
   seleccionado = signal<ProductoOffline | null>(null);
   variantes = signal<VarianteConStock[]>([]);
   cargandoVariantes = signal(false);
+  imagenesFallidas = signal<Set<number>>(new Set());
 
   async ngOnInit(): Promise<void> {
     const [sello] = await Promise.all([this.catalog.selloActual(), this.buscar()]);
@@ -237,7 +238,14 @@ export class OfflineCatalogComponent implements OnInit {
   }
 
   imagen(producto: ProductoOffline): string | null {
-    return producto.imagenes?.[0] ?? null;
+    if (this.imagenesFallidas().has(producto.id)) return null;
+    const raw = producto.imagenes as unknown;
+    const url = Array.isArray(raw) ? raw[0] : undefined;
+    return typeof url === 'string' && url.trim() ? url : null;
+  }
+
+  marcarImagenError(productoId: number): void {
+    this.imagenesFallidas.update((s) => new Set(s).add(productoId));
   }
 
   stockTexto(item: VarianteConStock): string {

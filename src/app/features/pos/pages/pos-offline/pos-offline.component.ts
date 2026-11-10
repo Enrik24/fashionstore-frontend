@@ -543,8 +543,8 @@ export class PosOfflineComponent implements OnInit {
     }
   }
 
-  descargar(comprobante: ComprobanteLocal): void {
-    if (!this.documents.descargar(comprobante)) {
+  async descargar(comprobante: ComprobanteLocal): Promise<void> {
+    if (!(await this.documents.descargar(comprobante))) {
       this.toast.warning('No se pudo generar el archivo del comprobante.', 'Descarga no disponible');
     }
   }

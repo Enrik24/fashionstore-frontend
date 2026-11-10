@@ -140,6 +140,16 @@ describe('ReturnsApiService (CU28 - Devoluciones y Cambios)', () => {
     req.flush({ ...mockSolicitud, estado: 'RECHAZADA', observaciones_staff: 'Prenda usada' });
   });
 
+  it('debe desenvolver { reposiciones: [...] } del backend en array (bug Symbol.iterator)', () => {
+    service.listarReposiciones().subscribe(res => {
+      expect(Array.isArray(res)).toBe(true);
+      expect(res.length).toBe(1);
+    });
+    const req = httpMock.expectOne(`${API_URL}/reposiciones`);
+    expect(req.request.method).toBe('GET');
+    req.flush({ reposiciones: [mockSolicitud] });
+  });
+
   it('debe reintentar el reembolso de una solicitud PENDIENTE_REEMBOLSO', () => {
     service.processRefund(1).subscribe(res => {
       expect(res.estado).toBe('COMPLETADA');

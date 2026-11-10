@@ -24,6 +24,19 @@ export class ActivePromotionsService {
     });
   }
 
+  /** Lista reactiva de promociones activas ya cargadas (para banner). */
+  promociones(): PromocionPublica[] {
+    return this._promociones();
+  }
+
+  /** [EXAMEN-2] Promo destacada para el banner de campañas: la de mayor %. */
+  getPromocionDestacada(): PromocionPublica | null {
+    const candidatas = this._promociones()
+      .filter(p => p.tipo === "PORCENTAJE" && (p.valor ?? 0) > 0)
+      .sort((a, b) => (b.valor ?? 0) - (a.valor ?? 0));
+    return candidatas[0] ?? null;
+  }
+
   getDiscountForProduct(productoId: number, categoriaId?: number): number | null {
     const promociones = this._promociones();
     let maxDescuento: number | null = null;

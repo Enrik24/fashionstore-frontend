@@ -42,22 +42,30 @@ export class TenantContextService {
 
   /** Carga plan, suscripción y funcionalidades después del login. */
   cargarContexto(tenantId?: number | null): Observable<void> {
-    const tenantActivo = this.tenant();
-    const id = tenantId ?? tenantActivo?.id ?? null;
+    const tenantGuardado = this.storage.getTenantActivo<Tenant>();
+    const id = tenantId ?? tenantGuardado?.id ?? this.tenant()?.id ?? null;
     if (!id) {
       this.limpiarContexto();
       return of(void 0);
     }
 
-    if (tenantId && tenantActivo?.id !== tenantId) {
-      this.storage.setTenantActivo({ id } as Tenant);
+    // ✅ FIX E1: NO sobrescribir tenant completo con {id}. Si ya está en storage/signal con estado, úsalo.
+    if (tenantGuardado?.id === id && tenantGuardado.estado) {
+      this.tenant.set(tenantGuardado);
     }
 
+    // Cargar tenant completo desde /saas/configuracion para tener estado OPERATIVO y no depender solo del token (que puede ser incompleto).
     return forkJoin({
+      configuracion: this.saasApi.obtenerConfiguracionTenant().pipe(catchError(() => of(null))),
       suscripcion: this.saasApi.obtenerMiSuscripcion().pipe(catchError(() => of(null))),
       funcionalidades: this.saasApi.obtenerFuncionalidadesPlan().pipe(catchError(() => of(null)))
     }).pipe(
-      tap(({ suscripcion, funcionalidades }) => {
+      tap(({ configuracion, suscripcion, funcionalidades }) => {
+        if (configuracion?.tenant) {
+          this.actualizarTenant(configuracion.tenant);
+        } else if (tenantGuardado?.estado) {
+          this.tenant.set(tenantGuardado);
+        }
         this.suscripcion.set(suscripcion);
         this.plan.set(suscripcion?.plan ?? null);
         this.funcionalidades.set(funcionalidades);
