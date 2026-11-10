@@ -125,10 +125,12 @@ export function crearMemoriaOffline(): MemoriaOffline {
 }
 
 export interface OpcionesStorage {
-  tenantId?: number;
+  tenantId?: number | null;
   usuarioId?: number;
   sucursalId?: number | null;
   dispositivoId?: string;
+  esSuperAdmin?: boolean;
+  tenantConsultadoId?: number | null;
 }
 
 export function crearStorageFalso(opciones: OpcionesStorage = {}): StorageService {
@@ -136,14 +138,18 @@ export function crearStorageFalso(opciones: OpcionesStorage = {}): StorageServic
     tenantId = 10,
     usuarioId = 7,
     sucursalId = 2,
-    dispositivoId = 'dev-1'
+    dispositivoId = 'dev-1',
+    esSuperAdmin = false,
+    tenantConsultadoId = null
   } = opciones;
 
   return {
     getAccessToken: () => 'token-falso',
-    getTenantActivo: () => ({ id: tenantId }),
+    getTenantActivo: () => (tenantId === null ? null : { id: tenantId }),
     getUser: () => ({ id: usuarioId, sucursal_id: sucursalId }),
     getDispositivoId: () => dispositivoId,
+    getEsSuperAdmin: () => esSuperAdmin,
+    getTenantConsultadoId: () => tenantConsultadoId,
     setUser: () => undefined,
     setTenantActivo: () => undefined
   } as unknown as StorageService;

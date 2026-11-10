@@ -100,7 +100,7 @@ export class ConflictService {
   public nuevos = signal<number>(0);
 
   async listarPendientes(filtros: FiltrosConflictos = {}): Promise<LogConflicto[]> {
-    if (this.connectivity.enLinea()) {
+    if (this.puedeConsultarBackend()) {
       try {
         const conflictos = await this.primero(
           this.offlineApi.listarConflictos({ resuelto: false, ...filtros })
@@ -112,6 +112,19 @@ export class ConflictService {
       }
     }
     return this.listarLocal({ resuelto: false, ...filtros });
+  }
+
+  /**
+   * [EXAMEN-2] El backend exige `X-Tenant-ID` al Super Administrador. Si no
+   * hay un tenant consultado, la petición respondería 404 RECURSO_NO_ENCONTRADO;
+   * en ese caso se trabaja con la caché local (plan, 4.2).
+   */
+  private puedeConsultarBackend(): boolean {
+    if (!this.connectivity.enLinea()) return false;
+    if (this.storage.getEsSuperAdmin() && !this.storage.getTenantConsultadoId()) {
+      return false;
+    }
+    return true;
   }
 
   async listarLocal(filtros: FiltrosConflictos = {}): Promise<LogConflicto[]> {
@@ -127,7 +140,7 @@ export class ConflictService {
   }
 
   async obtenerDetalle(id: number): Promise<LogConflicto | null> {
-    if (this.connectivity.enLinea()) {
+    if (this.puedeConsultarBackend()) {
       try {
         const conflicto = await this.primero(this.offlineApi.obtenerConflicto(id));
         await this.cachear([conflicto]);
@@ -173,7 +186,7 @@ export class ConflictService {
     // backend: ese endpoint exige token y devolvería 403 Token ausente.
     // Se usa directo el conteo local.
     const haySesion = !!this.storage.getAccessToken?.();
-    if (haySesion && this.connectivity.enLinea()) {
+    if (haySesion && this.puedeConsultarBackend()) {
       try {
         const respuesta = await this.primero(this.offlineApi.contarConflictosPendientes());
         this.nuevos.set(respuesta.pendientes);
