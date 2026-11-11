@@ -140,16 +140,19 @@ import { ActivePromotionsService } from '../../../../core/services/active-promot
                 <div class="price-box">
                   @if (descuento()) {
                     <div class="price-promo-wrapper">
-                      <span class="price-original-detail">Bs. {{ product.precio | number:'1.2-2' }}</span>
+                      <span class="price-original-detail">Bs. {{ precioActual() | number:'1.2-2' }}</span>
                       <div class="price-promo-row">
                         <span class="currency">Bs.</span>
                         <span class="amount">{{ precioConDescuento() | number:'1.2-2' }}</span>
-                        <span class="savings-tag">Ahorras Bs. {{ (product.precio - precioConDescuento()) | number:'1.2-2' }}</span>
+                        <span class="savings-tag">Ahorras Bs. {{ (precioActual() - precioConDescuento()) | number:'1.2-2' }}</span>
                       </div>
                     </div>
                   } @else {
                     <span class="currency">Bs.</span>
-                    <span class="amount">{{ product.precio | number:'1.2-2' }}</span>
+                    <span class="amount">{{ precioActual() | number:'1.2-2' }}</span>
+                  }
+                  @if (notaPrecio(); as nota) {
+                    <span class="price-note">{{ nota }}</span>
                   }
                 </div>
 
@@ -566,6 +569,12 @@ import { ActivePromotionsService } from '../../../../core/services/active-promot
       display: flex;
       flex-direction: column;
       gap: 0.25rem;
+    }
+
+    .price-note {
+      font-size: 0.8125rem;
+      color: var(--text-muted, #94a3b8);
+      font-weight: 500;
     }
 
     .price-original-detail {
@@ -1116,8 +1125,33 @@ export class ProductDetailComponent implements OnInit, OnDestroy {
   precioConDescuento(): number {
     if (!this.product) return 0;
     const desc = this.descuento();
-    if (!desc) return this.product.precio;
-    return Math.round(this.product.precio * (1 - desc / 100) * 100) / 100;
+    const precio = this.precioActual();
+    if (!desc) return precio;
+    return Math.round(precio * (1 - desc / 100) * 100) / 100;
+  }
+
+  /**
+   * Precio vigente de la prenda: el de la variante seleccionada (talla + color),
+   * que es exactamente el que se cobra al agregar al carrito
+   * (el backend toma `VarianteProducto.precio_variante`).
+   * Si la variante no tiene precio propio, cae al precio base del producto.
+   */
+  precioActual(): number {
+    const precioVariante = this.selectedVariant?.precio_variante;
+    if (precioVariante !== undefined && precioVariante !== null) {
+      return Number(precioVariante);
+    }
+    return Number(this.product?.precio ?? 0);
+  }
+
+  /** Texto auxiliar que aclara que el precio mostrado depende de la talla elegida. */
+  notaPrecio(): string | null {
+    if (this.selectedVariant?.precio_variante === undefined ||
+        this.selectedVariant?.precio_variante === null) {
+      return null;
+    }
+    const talla = this.selectedSize?.valor || this.selectedSize?.nombre;
+    return talla ? `Precio de la talla ${talla}` : 'Precio de la variante seleccionada';
   }
 
   isColorDark(hex?: string): boolean {
