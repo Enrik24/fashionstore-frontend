@@ -183,9 +183,9 @@ import { CurrencyFormatPipe } from '../../../../shared/pipes/currency-format.pip
                     </td>
                     <td class="text-right">
                       <div class="acciones-fila">
-                        <a class="btn btn-sm btn-accent" [routerLink]="['/plataforma/suscripciones', s.id, 'checkout']">
+                        <button type="button" class="btn btn-sm btn-accent" (click)="irAPagar(s)">
                           <i class="ri-bank-card-line"></i> Pagar
-                        </a>
+                        </button>
                         <button type="button" class="btn btn-sm btn-outline" (click)="renovar(s)" title="Renovar">
                           <i class="ri-refresh-line"></i>
                         </button>
@@ -397,17 +397,45 @@ export class SuscripcionPanelComponent implements OnInit {
     if (!planId) return;
 
     this.saasApi.cambiarPlan(suscripcion.id, planId).subscribe({
+      next: (actualizada) => this.aplicarCambioDePlan(actualizada, 'Plan cambiado.'),
+      error: (err) => this.toast.error(this.mensajeError(err, 'No se pudo cambiar el plan. Verifica el uso actual del tenant.'))
+    });
+  }
+
+  /**
+   * [EXAMEN-2] CU03: acción del botón "Pagar". Si hay un plan nuevo
+   * seleccionado en la fila (vista previa "· nuevo plan"), lo aplica primero
+   * y luego navega al checkout; si no, va directo al checkout del plan actual.
+   */
+  public irAPagar(s: Suscripcion): void {
+    const planId = this.planPorSuscripcion[s.id];
+    if (!planId) {
+      this.router.navigate(['/plataforma/suscripciones', s.id, 'checkout']);
+      return;
+    }
+
+    const plan = this.planes().find((p) => p.id === planId);
+    const nombre = plan?.nombre ?? 'seleccionado';
+    const precio = plan?.precio_mensual ?? s.plan?.precio_mensual ?? 0;
+    if (!confirm(`¿Pagar con el plan "${nombre}" (Bs. ${precio}/mes)? Se aplicará el cambio de plan antes de ir al pago.`)) return;
+
+    this.saasApi.cambiarPlan(s.id, planId).subscribe({
       next: (actualizada) => {
-        this.planPorSuscripcion[suscripcion.id] = null;
-        // Si la respuesta llega sin el objeto `plan` cargado, se rellena con
-        // el catálogo local para que nombre y precio se actualicen al instante.
-        const planNuevo = actualizada.plan ?? this.planes().find((p) => p.id === actualizada.plan_id);
-        const corregida: Suscripcion = planNuevo ? { ...actualizada, plan: planNuevo } : actualizada;
-        this.suscripciones.update((lista) => lista.map((s) => s.id === corregida.id ? corregida : s));
-        this.toast.success(`Plan cambiado a ${planNuevo?.nombre ?? 'el plan seleccionado'}.`);
+        this.aplicarCambioDePlan(actualizada, `Plan cambiado a ${nombre}.`);
+        this.router.navigate(['/plataforma/suscripciones', s.id, 'checkout']);
       },
       error: (err) => this.toast.error(this.mensajeError(err, 'No se pudo cambiar el plan. Verifica el uso actual del tenant.'))
     });
+  }
+
+  private aplicarCambioDePlan(actualizada: Suscripcion, mensaje: string): void {
+    this.planPorSuscripcion[actualizada.id] = null;
+    // Si la respuesta llega sin el objeto `plan` cargado, se rellena con
+    // el catálogo local para que nombre y precio se actualicen al instante.
+    const planNuevo = actualizada.plan ?? this.planes().find((p) => p.id === actualizada.plan_id);
+    const corregida: Suscripcion = planNuevo ? { ...actualizada, plan: planNuevo } : actualizada;
+    this.suscripciones.update((lista) => lista.map((s) => s.id === corregida.id ? corregida : s));
+    this.toast.success(mensaje);
   }
 
   public renovar(suscripcion: Suscripcion): void {
