@@ -195,6 +195,19 @@ export class SaasApiService {
     return this.obtenerPlan(planId).pipe(switchMap((plan) => registrar(plan.precio_mensual)));
   }
 
+  /**
+   * [EXAMEN-2] CU03 / RN-011: confirma el pago de la suscripción tras el
+   * retorno de Stripe Checkout (`POST /saas/suscripciones/stripe/confirmar-retorno`).
+   * La llaman las páginas `/suscripcion-exitosa` y `/suscripcion-cancelada`.
+   */
+  confirmarRetornoSuscripcion(sessionId: string, suscripcionId: number | null) {
+    let params = new HttpParams().set('session_id', sessionId);
+    if (suscripcionId) params = params.set('suscripcion_id', String(suscripcionId));
+    return this.http.post<{ mensaje: string; payment_status: string }>(
+      `${this.API_URL}/suscripciones/stripe/confirmar-retorno`, null, { params }
+    );
+  }
+
   /** Historial de pagos del tenant autenticado (`GET /saas/mi-suscripcion/pagos`). */
   listarPagosSuscripcion(): Observable<HistorialPagos> {
     return this.http.get<HistorialPagos>(`${this.API_URL}/mi-suscripcion/pagos`);

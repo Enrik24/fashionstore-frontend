@@ -429,6 +429,12 @@ export class SuscripcionPanelComponent implements OnInit {
     this.saasApi.listarSuscripciones().subscribe({
       next: (suscripciones) => {
         this.suscripciones.set(suscripciones);
+        // [EXAMEN-2] Inicializa el select "Cambiar plan" en su opción
+        // placeholder (el nombre del plan actual). Si queda `undefined`, el
+        // ngModel no matchea ninguna opción y el select se muestra vacío.
+        suscripciones.forEach((s) => {
+          if (this.planPorSuscripcion[s.id] === undefined) this.planPorSuscripcion[s.id] = null;
+        });
         this.cargando.set(false);
       },
       error: () => {

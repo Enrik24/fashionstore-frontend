@@ -453,6 +453,22 @@ export const routes: Routes = [
     ]
   },
   {
+    // [EXAMEN-2] CU03 / RN-011: retorno de Stripe Checkout para la suscripción.
+    // Deben existir como rutas raíz porque son las URLs configuradas en las
+    // variables STRIPE_SUSCRIPCION_SUCCESS_URL / STRIPE_SUSCRIPCION_CANCEL_URL
+    // del backend (antes caían en el wildcard y redirigían al home).
+    path: 'suscripcion-exitosa',
+    loadComponent: () => import('./features/plataforma/pages/suscripciones/suscripcion-retorno.component').then(m => m.SuscripcionRetornoComponent),
+    data: { cancelado: false },
+    title: 'FashionStore - Pago de suscripción exitoso'
+  },
+  {
+    path: 'suscripcion-cancelada',
+    loadComponent: () => import('./features/plataforma/pages/suscripciones/suscripcion-retorno.component').then(m => m.SuscripcionRetornoComponent),
+    data: { cancelado: true },
+    title: 'FashionStore - Pago de suscripción cancelado'
+  },
+  {
     path: '**',
     redirectTo: 'home'
   }
