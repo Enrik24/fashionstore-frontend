@@ -155,7 +155,14 @@ import { CurrencyFormatPipe } from '../../../../shared/pipes/currency-format.pip
                           <i class="ri-arrow-up-down-line"></i>
                         </button>
                       </div>
-                      <span class="precio">{{ s.plan?.precio_mensual | currencyFormat:'Bs.' }}/mes</span>
+                      <span class="precio">
+                        {{ precioVisible(s) | currencyFormat:'Bs.' }}/mes
+                        @if (planSeleccionado(s); as seleccionado) {
+                          @if (seleccionado.id !== s.plan_id) {
+                            <em class="preview">· nuevo plan</em>
+                          }
+                        }
+                      </span>
                     </td>
                     <td>
                       <span class="fecha">{{ s.fecha_inicio | date: 'dd/MM/yyyy' }}</span>
@@ -232,7 +239,9 @@ import { CurrencyFormatPipe } from '../../../../shared/pipes/currency-format.pip
       padding: 0.3rem 0.4rem; font-size: 0.75rem; font-family: inherit; color: var(--primary); background: white;
       max-width: 150px;
     }
-    .precio { display: block; margin-top: 0.15rem; font-size: 0.66rem; color: var(--text-muted); }
+    .precio { display: block; margin-top: 0.15rem; font-size: 0.66rem; color: var(--text-muted);
+      .preview { color: var(--accent); font-style: normal; font-weight: 700; }
+    }
 
     .fecha { display: block; font-size: 0.76rem; color: var(--primary); font-weight: 600; &.vencida { color: var(--critical); } }
     .dias { display: block; margin-top: 0.1rem; font-size: 0.66rem; color: var(--success); &.vencida { color: var(--critical); } }
@@ -342,6 +351,20 @@ export class SuscripcionPanelComponent implements OnInit {
     return this.tenants().find((t) => t.id === id)?.razon_social ?? `Empresa #${id}`;
   }
 
+  /**
+   * [EXAMEN-2] CU03: plan visible en la fila = el plan elegido en el select
+   * (vista previa) o el plan actual si aún no se eligió ninguno.
+   */
+  public planSeleccionado(s: Suscripcion): Plan | undefined {
+    const seleccion = this.planPorSuscripcion[s.id];
+    if (seleccion) return this.planes().find((p) => p.id === seleccion);
+    return s.plan ?? undefined;
+  }
+
+  public precioVisible(s: Suscripcion): number {
+    return this.planSeleccionado(s)?.precio_mensual ?? s.plan?.precio_mensual ?? 0;
+  }
+
   public asignar(): void {
     this.error.set(null);
     if (!this.nueva.tenant_id || !this.nueva.plan_id) {
@@ -376,8 +399,12 @@ export class SuscripcionPanelComponent implements OnInit {
     this.saasApi.cambiarPlan(suscripcion.id, planId).subscribe({
       next: (actualizada) => {
         this.planPorSuscripcion[suscripcion.id] = null;
-        this.suscripciones.update((lista) => lista.map((s) => s.id === actualizada.id ? actualizada : s));
-        this.toast.success('Plan cambiado.');
+        // Si la respuesta llega sin el objeto `plan` cargado, se rellena con
+        // el catálogo local para que nombre y precio se actualicen al instante.
+        const planNuevo = actualizada.plan ?? this.planes().find((p) => p.id === actualizada.plan_id);
+        const corregida: Suscripcion = planNuevo ? { ...actualizada, plan: planNuevo } : actualizada;
+        this.suscripciones.update((lista) => lista.map((s) => s.id === corregida.id ? corregida : s));
+        this.toast.success(`Plan cambiado a ${planNuevo?.nombre ?? 'el plan seleccionado'}.`);
       },
       error: (err) => this.toast.error(this.mensajeError(err, 'No se pudo cambiar el plan. Verifica el uso actual del tenant.'))
     });
