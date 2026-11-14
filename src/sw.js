@@ -15,8 +15,9 @@ const CACHE_VERSION = 'fashionstore-v2';
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const ASSETS_CACHE = `${CACHE_VERSION}-assets`;
 const PUBLIC_API_CACHE = `${CACHE_VERSION}-public-api`;
-// La llena CU05 (offline-catalog.service) con las imágenes de los productos.
-const IMAGES_CACHE = `${CACHE_VERSION}-imagenes`;
+// La llena CU05 (offline-catalog.service, CACHE_IMAGENES). Debe coincidir con ese
+// nombre y NO llevar versión: las imágenes descargadas sobreviven a updates del SW.
+const IMAGES_CACHE = 'fashionstore-v1-imagenes';
 
 const SHELL_URLS = [
   '/',
@@ -44,7 +45,7 @@ self.addEventListener('activate', (event) => {
   event.waitUntil((async () => {
     const keys = await caches.keys();
     await Promise.all(
-      keys.filter((key) => !key.startsWith(CACHE_VERSION)).map((key) => caches.delete(key))
+      keys.filter((key) => !key.startsWith(CACHE_VERSION) && key !== IMAGES_CACHE).map((key) => caches.delete(key))
     );
     // Purga chunks de builds anteriores; solo si hay manifiesto (nunca offline).
     const urls = new Set(await obtenerManifiesto());
