@@ -32,6 +32,8 @@ export class CartService {
 
   // [EXAMEN-2] Estado para `sync-status-badge` y aviso del ícono del carrito.
   public estadoSincronizacion = signal<string>('ONLINE');
+  // CU15: última conversión offline, para mostrar el éxito aunque el carrito se vacíe.
+  public conversionOffline = signal<ConversionLocal | null>(null);
   public esOffline = computed(() => !this.connectivity.enLinea() || this.cartSignal()?.es_offline === true);
   public tieneCambiosSinSincronizar = computed(() => this.esOffline() && this.itemCountSignal() > 0);
 
@@ -142,6 +144,7 @@ export class CartService {
     this.loadingSignal.set(true);
 
     if (!this.connectivity.enLinea()) {
+      this.conversionOffline.set(null);
       return from(this.offlineCart.agregarItem(varianteProductoId, cantidad)).pipe(
         map((carrito) => this.aItemCarrito(carrito)),
         tap(() => {
@@ -333,6 +336,7 @@ export class CartService {
   } = {}): Promise<ConversionLocal> {
     return this.offlineCart.convertirAOrden(opciones).then((conversion) => {
       this.estadoSincronizacion.set(conversion.operacion.estado_sincronizacion);
+      this.conversionOffline.set(conversion);
       this.cartSignal.set(null);
       return conversion;
     });

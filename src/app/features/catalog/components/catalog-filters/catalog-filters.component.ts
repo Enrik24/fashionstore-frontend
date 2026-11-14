@@ -448,12 +448,13 @@ export class CatalogFiltersComponent implements OnInit {
   public telas: TipoTela[] = [];
 
   ngOnInit(): void {
-    this.catalogApi.getCategories().subscribe(cats => this.categories = cats);
-    this.catalogApi.getSeasons().subscribe(seasons => this.seasons = seasons);
-    this.catalogApi.getSizes().subscribe(sizes => this.sizes = sizes);
-    this.catalogApi.getColors().subscribe(colors => this.colors = colors);
-    this.catalogApi.getCollections().subscribe(cols => this.collections = cols || []);
-    this.catalogApi.listarTiposTela().subscribe(telas => this.telas = telas || []);
+    // [EXAMEN-2] Sin conexión estas listas quedan vacías; el catálogo local aún funciona.
+    this.catalogApi.getCategories().subscribe({ next: cats => this.categories = cats, error: () => this.categories = [] });
+    this.catalogApi.getSeasons().subscribe({ next: seasons => this.seasons = seasons, error: () => this.seasons = [] });
+    this.catalogApi.getSizes().subscribe({ next: sizes => this.sizes = sizes, error: () => this.sizes = [] });
+    this.catalogApi.getColors().subscribe({ next: colors => this.colors = colors, error: () => this.colors = [] });
+    this.catalogApi.getCollections().subscribe({ next: cols => this.collections = cols || [], error: () => this.collections = [] });
+    this.catalogApi.listarTiposTela().subscribe({ next: telas => this.telas = telas || [], error: () => this.telas = [] });
   }
 
   onFilterChange(): void {

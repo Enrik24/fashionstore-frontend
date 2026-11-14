@@ -1,11 +1,14 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, OnDestroy, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { PublicCatalogService } from '../../../../core/services/public-catalog.service';
 import { CatalogApiService } from '../../../../core/services/catalog-api.service';
-import { Producto, GeneroProducto } from '../../../../core/models/catalog.model';
+import { Producto, GeneroProducto, EstadoProducto } from '../../../../core/models/catalog.model';
 import { ProductoFilterParams, ProductoBusquedaResponse } from '../../../../core/models/public-catalog.model';
+import { ProductoOffline } from '../../../../core/models/offline.model';
+import { ConnectivityService } from '../../../../core/offline/connectivity.service';
+import { OfflineCatalogService } from '../../../../core/offline/offline-catalog.service';
 import { ProductCardComponent } from '../../components/product-card/product-card.component';
 import { CatalogFiltersComponent } from '../../components/catalog-filters/catalog-filters.component';
 import { PromotionsBannerComponent } from '../../../../shared/components/promotions-banner/promotions-banner.component';
@@ -82,6 +85,17 @@ import { PromotionsBannerComponent } from '../../../../shared/components/promoti
 
       <!-- Main Content Layout -->
       <div class="container catalog-container">
+        <!-- [EXAMEN-2] CU05/CU15: catálogo servido desde IndexedDB sin conexión -->
+        @if (modoOffline()) {
+          <div class="offline-banner">
+            <i class="ri-wifi-off-line"></i>
+            <div class="offline-banner-text">
+              <strong>Modo offline.</strong>
+              Estás viendo el catálogo descargado{{ selloOffline() ? ' el ' + (selloOffline() | date:'short') : '' }}.
+              Precios y stock son referenciales; el total se recalcula al sincronizar.
+            </div>
+          </div>
+        }
         <div class="catalog-layout">
           <!-- Sidebar Filters -->
           <aside class="filters-sidebar">
@@ -132,8 +146,14 @@ import { PromotionsBannerComponent } from '../../../../shared/components/promoti
                 <div class="empty-icon">
                   <i class="ri-shirt-line"></i>
                 </div>
-                <h3>No se encontraron productos</h3>
-                <p>Intenta ajustar tus filtros o buscar con un término diferente.</p>
+                <h3>{{ modoOffline() ? 'Sin productos descargados' : 'No se encontraron productos' }}</h3>
+                <p>
+                  @if (modoOffline()) {
+                    No hay datos offline en este dispositivo. Conéctate a internet y descarga los datos para operar sin conexión.
+                  } @else {
+                    Intenta ajustar tus filtros o buscar con un término diferente.
+                  }
+                </p>
                 <button class="btn btn-primary btn-sm" (click)="resetFilters()">
                   Ver todo el catálogo
                 </button>
@@ -305,6 +325,21 @@ import { PromotionsBannerComponent } from '../../../../shared/components/promoti
       }
     }
 
+    .offline-banner {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      background: #fffbeb;
+      border: 1px solid #fcd34d;
+      color: #92400e;
+      border-radius: var(--radius-md);
+      padding: 0.75rem 1rem;
+      margin-bottom: 1.25rem;
+      font-size: 0.875rem;
+
+      i { font-size: 1.25rem; flex-shrink: 0; }
+    }
+
     .catalog-container {
       margin-top: 2rem;
     }
@@ -458,17 +493,22 @@ import { PromotionsBannerComponent } from '../../../../shared/components/promoti
     }
   `]
 })
-export class CatalogListComponent implements OnInit {
+export class CatalogListComponent implements OnInit, OnDestroy {
   private catalogService = inject(PublicCatalogService);
   private catalogApiService = inject(CatalogApiService);
   private route = inject(ActivatedRoute);
   private router = inject(Router);
+  private connectivity = inject(ConnectivityService);
+  private offlineCatalog = inject(OfflineCatalogService);
 
   public products: Producto[] = [];
   public totalProducts: number = 0;
   public totalPages: number = 1;
   public currentPage: number = 1;
   public loading = signal<boolean>(false);
+  public modoOffline = signal<boolean>(false);
+  public selloOffline = signal<string | null>(null);
+  private quitarListenerConexion: (() => void) | null = null;
 
   public filters: ProductoFilterParams = {
     q: '',
@@ -478,6 +518,11 @@ export class CatalogListComponent implements OnInit {
   };
 
   ngOnInit(): void {
+    // [EXAMEN-2] Al recuperar la red, volver al catálogo en línea si estábamos offline.
+    this.quitarListenerConexion = this.connectivity.alRecuperarConexion(() => {
+      if (this.modoOffline()) this.loadCatalog();
+    });
+
     this.route.queryParams.subscribe(params => {
       if (params['q']) this.filters.q = params['q'];
       if (params['genero']) this.filters.genero = params['genero'] as GeneroProducto;
@@ -493,6 +538,10 @@ export class CatalogListComponent implements OnInit {
       if (params['color_id']) this.filters.color_id = Number(params['color_id']);
       this.loadCatalog();
     });
+  }
+
+  ngOnDestroy(): void {
+    this.quitarListenerConexion?.();
   }
 
   /** Nombre de la colección activa (para el banner "Viendo colección"). */
@@ -518,19 +567,84 @@ export class CatalogListComponent implements OnInit {
     this.loading.set(true);
     this.filters.pagina = this.currentPage;
 
+    // [EXAMEN-2] CU05/CU15: sin conexión se sirve el catálogo descargado en IndexedDB.
+    if (!this.connectivity.enLinea()) {
+      void this.cargarCatalogoLocal();
+      return;
+    }
+
     this.catalogService.getCatalog(this.filters).subscribe({
       next: (res: ProductoBusquedaResponse) => {
         this.products = res.items || [];
         this.totalProducts = res.total || 0;
         this.totalPages = res.total_paginas || 1;
         this.currentPage = res.pagina || 1;
+        this.modoOffline.set(false);
         this.loading.set(false);
       },
       error: () => {
-        this.products = [];
-        this.loading.set(false);
+        // El backend no respondió: intentar con los datos locales antes de rendirse.
+        void this.cargarCatalogoLocal();
       }
     });
+  }
+
+  /** [EXAMEN-2] Catálogo local con filtros, orden y paginación en el dispositivo. */
+  private async cargarCatalogoLocal(): Promise<void> {
+    try {
+      const locales = await this.offlineCatalog.buscarLocal(this.filters.q ?? '', {
+        categoriaId: this.filters.categoria_id ?? null,
+        genero: this.filters.genero ?? null
+      });
+
+      let lista = locales.map((p) => this.aProducto(p));
+      if (this.filters.precio_min != null) lista = lista.filter((p) => p.precio >= this.filters.precio_min!);
+      if (this.filters.precio_max != null) lista = lista.filter((p) => p.precio <= this.filters.precio_max!);
+
+      switch (this.filters.orden_por) {
+        case 'precio_asc': lista.sort((a, b) => a.precio - b.precio); break;
+        case 'precio_desc': lista.sort((a, b) => b.precio - a.precio); break;
+        case 'nombre': lista.sort((a, b) => a.nombre.localeCompare(b.nombre)); break;
+        default: lista.sort((a, b) => (b.updated_at ?? '').localeCompare(a.updated_at ?? '')); break;
+      }
+
+      const limite = this.filters.limite ?? 12;
+      this.totalProducts = lista.length;
+      this.totalPages = Math.max(1, Math.ceil(lista.length / limite));
+      this.currentPage = Math.min(Math.max(1, this.currentPage), this.totalPages);
+      const inicio = (this.currentPage - 1) * limite;
+      this.products = lista.slice(inicio, inicio + limite);
+      this.modoOffline.set(true);
+      this.selloOffline.set(await this.offlineCatalog.selloActual());
+    } catch {
+      this.products = [];
+      this.totalProducts = 0;
+      this.totalPages = 1;
+      this.modoOffline.set(true);
+    } finally {
+      this.loading.set(false);
+    }
+  }
+
+  private aProducto(p: ProductoOffline): Producto {
+    return {
+      id: p.id,
+      sku: p.sku,
+      nombre: p.nombre,
+      descripcion: p.descripcion ?? '',
+      precio: p.precio,
+      imagenes: p.imagenes ?? [],
+      estado: (p.estado as EstadoProducto) || 'ACTIVO',
+      genero: (p.genero as GeneroProducto) || undefined,
+      categoria_id: p.categoria_id ?? 0,
+      categoria: p.categoria ? { id: p.categoria_id ?? 0, nombre: p.categoria } : undefined,
+      temporada_id: p.temporada_id ?? undefined,
+      temporada: p.temporada
+        ? { id: p.temporada_id ?? 0, nombre: p.temporada, fecha_inicio: '', fecha_fin: '' }
+        : undefined,
+      tenant_id: p.tenant_id,
+      updated_at: p.updated_at ?? undefined
+    };
   }
 
   onSearch(): void {

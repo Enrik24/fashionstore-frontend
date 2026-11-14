@@ -47,6 +47,8 @@ const CLAVE_DATOS_MAESTROS = 'datos_maestros';
 const CLAVE_IMPUESTOS = 'impuestos';
 const CLAVE_STRIPE = 'stripe';
 const CLAVE_SUCURSALES = 'sucursales_cache';
+/** Mismo nombre que usa sw.js para servir imágenes cross-origin sin red. */
+const CACHE_IMAGENES = 'fashionstore-v1-imagenes';
 
 /**
  * [EXAMEN-2] CU05 / RNF-14: paquete offline versionado en IndexedDB.
@@ -106,6 +108,7 @@ export class OfflineCatalogService {
     await this.indexedDb.guardarLote('variantes', variantesFinales);
     await this.indexedDb.guardarLote('stock', stockFinal);
     await this.indexedDb.guardarLote('clientes', clientes);
+    const imagenesCacheadas = await this.cachearImagenes(productosFinales);
 
     if (completo.configuracion_offline) {
       await this.guardarConfiguracionOffline(completo.configuracion_offline);
@@ -141,6 +144,7 @@ export class OfflineCatalogService {
         : 0,
       bytes: this.estimarBytes({ productos: productosFinales, variantes: variantesFinales, stock: stockFinal, clientes }),
       completa: !recortado,
+      imagenes: imagenesCacheadas,
       fecha
     };
 
@@ -175,6 +179,7 @@ export class OfflineCatalogService {
     await this.indexedDb.guardarLote('productos', productos);
     await this.indexedDb.guardarLote('variantes', variantes);
     await this.indexedDb.guardarLote('stock', stock);
+    const imagenesCacheadas = await this.cachearImagenes(productos);
     await this.guardarMeta(CLAVE_CURSOR, (delta as CatalogoIncremental).desde_version ?? new Date().toISOString());
 
     const fecha = new Date().toISOString();
@@ -193,6 +198,7 @@ export class OfflineCatalogService {
       promociones: 0,
       bytes: this.estimarBytes({ productos, variantes, stock, clientes: [] }),
       completa: false,
+      imagenes: imagenesCacheadas,
       fecha
     };
   }
@@ -421,6 +427,46 @@ export class OfflineCatalogService {
       }
     }
     return [];
+  }
+
+  /**
+   * CU05: guarda los bytes de la imagen principal de cada producto en Cache
+   * API para que el SW pueda servirlas sin red (son URLs cross-origin de
+   * Cloudinary; el paquete solo trae URLs, no imágenes). Best-effort: un fallo
+   * de imagen nunca interrumpe la descarga del catálogo.
+   */
+  private async cachearImagenes(productos: ProductoOffline[]): Promise<number> {
+    if (typeof caches === 'undefined') return 0;
+    const urls = [...new Set(
+      productos
+        .map((producto) => producto.imagenes?.[0])
+        .filter((url): url is string => !!url && /^https?:\/\//i.test(url))
+    )];
+    if (urls.length === 0) return 0;
+
+    try {
+      const cache = await caches.open(CACHE_IMAGENES);
+      let cacheadas = 0;
+      const CONCURRENCIA = 4;
+      for (let i = 0; i < urls.length; i += CONCURRENCIA) {
+        const lote = urls.slice(i, i + CONCURRENCIA);
+        const resultados = await Promise.all(lote.map(async (url) => {
+          try {
+            if (await cache.match(url)) return true;
+            const respuesta = await fetch(url, { mode: 'cors' });
+            if (!respuesta.ok) return false;
+            await cache.put(url, respuesta.clone());
+            return true;
+          } catch {
+            return false;
+          }
+        }));
+        cacheadas += resultados.filter(Boolean).length;
+      }
+      return cacheadas;
+    } catch {
+      return 0;
+    }
   }
 
   private normalizarVariantes(variantes: VarianteOffline[], tenantId: number): VarianteOffline[] {

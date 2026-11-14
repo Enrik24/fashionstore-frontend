@@ -5,7 +5,6 @@ import { RouterLink } from '@angular/router';
 import { CartService } from '../../../../core/services/cart.service';
 import { AuthService } from '../../../../core/services/auth.service';
 import { ToastService } from '../../../../core/services/toast.service';
-import { ConversionLocal } from '../../../../core/offline/offline-cart.service';
 import { ExpiryCountdownComponent } from '../../../../shared/components/expiry-countdown/expiry-countdown.component';
 
 /**
@@ -109,7 +108,7 @@ export class CartOfflinePanelComponent {
   aceptaTotal = false;
   confirmando = signal(false);
   error = signal<string | null>(null);
-  conversion = signal<ConversionLocal | null>(null);
+  conversion = this.cartService.conversionOffline;
 
   async confirmar(): Promise<void> {
     if (!this.aceptaTotal) {

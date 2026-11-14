@@ -544,6 +544,7 @@ export interface ResultadoDescargaOffline {
   promociones: number;
   bytes: number;
   completa: boolean;
+  imagenes?: number;
   fecha: string;
 }
 

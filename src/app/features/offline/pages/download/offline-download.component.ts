@@ -143,6 +143,7 @@ import { SyncStatusBadgeComponent } from '../../../../shared/components/sync-sta
                 <div><span>Stock</span><strong>{{ res.stock }}</strong></div>
                 <div><span>Clientes</span><strong>{{ res.clientes }}</strong></div>
                 <div><span>Promociones</span><strong>{{ res.promociones }}</strong></div>
+                <div><span>Imágenes</span><strong>{{ res.imagenes ?? 0 }}</strong></div>
                 <div><span>Peso</span><strong>{{ bytes(res.bytes) }}</strong></div>
               </div>
               <small class="resumen-fecha">Descargado el {{ res.fecha | date:'dd/MM/yyyy HH:mm' }} · versión {{ res.version }}</small>

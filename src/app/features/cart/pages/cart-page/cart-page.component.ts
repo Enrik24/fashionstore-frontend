@@ -30,17 +30,24 @@ import { CartOfflinePanelComponent } from '../../components/cart-offline-panel/c
             <span>Cargando tu carrito...</span>
           </div>
         } @else if (!cartService.cartSignal() || cartService.cartSignal()?.items?.length === 0) {
-          <!-- Empty Cart -->
-          <div class="empty-cart card">
-            <div class="empty-cart-icon">
-              <i class="ri-shopping-bag-line"></i>
+          @if (cartService.esOffline() && cartService.conversionOffline()) {
+            <!-- CU15: éxito de la compra offline aunque el carrito ya se vació -->
+            <div class="summary-card card offline-success-card">
+              <app-cart-offline-panel></app-cart-offline-panel>
             </div>
-            <h2>Tu carrito está vacío</h2>
-            <p>Parece que aún no has añadido ninguna prenda. Explora nuestras últimas colecciones y tendencias.</p>
-            <a routerLink="/catalog" class="btn btn-accent btn-lg">
-              <i class="ri-store-2-line"></i> Explorar Catálogo
-            </a>
-          </div>
+          } @else {
+            <!-- Empty Cart -->
+            <div class="empty-cart card">
+              <div class="empty-cart-icon">
+                <i class="ri-shopping-bag-line"></i>
+              </div>
+              <h2>Tu carrito está vacío</h2>
+              <p>Parece que aún no has añadido ninguna prenda. Explora nuestras últimas colecciones y tendencias.</p>
+              <a routerLink="/catalog" class="btn btn-accent btn-lg">
+                <i class="ri-store-2-line"></i> Explorar Catálogo
+              </a>
+            </div>
+          }
         } @else {
           <!-- Cart Grid -->
           <div class="cart-grid">
@@ -339,6 +346,11 @@ import { CartOfflinePanelComponent } from '../../components/cart-offline-panel/c
       color: var(--text-muted);
       font-size: 0.9375rem;
       margin-top: 0.25rem;
+    }
+
+    .offline-success-card {
+      max-width: 600px;
+      margin: 2rem auto;
     }
 
     .empty-cart {

@@ -1,4 +1,6 @@
 import { Injectable, inject } from '@angular/core';
+// Estático: el SW cachea este chunk al cargar la ruta; con import() dinámico el primer clic sin red cuelga y falla.
+import { jsPDF } from 'jspdf';
 import { ComprobanteLocal } from '../models/offline.model';
 import { IndexedDbService } from './indexed-db.service';
 import { DeviceService } from './device.service';
@@ -72,41 +74,118 @@ export class OfflineDocumentService {
     return true;
   }
 
-  /** Descarga el comprobante como PDF (mismo contenido que el texto). */
+  /** Descarga el comprobante como PDF maquetado al ancho real de la página. */
   async descargar(comprobante: ComprobanteLocal): Promise<boolean> {
     if (typeof document === 'undefined') return false;
     try {
-      const { jsPDF } = await import('jspdf');
       const doc = new jsPDF({ unit: 'mm', format: 'a5' });
-      let y = 14;
+      const ancho = doc.internal.pageSize.getWidth();
+      const alto = doc.internal.pageSize.getHeight();
+      const margen = 12;
+      const centro = ancho / 2;
+      const derecha = ancho - margen;
+      const util = ancho - margen * 2;
+      const acento: [number, number, number] = [219, 39, 119];
+      const tinta: [number, number, number] = [15, 23, 42];
+      const gris: [number, number, number] = [100, 116, 139];
+      const linea: [number, number, number] = [226, 232, 240];
+
+      let y = 0;
+      const saltoSiHaceFalta = (necesario: number) => {
+        if (y + necesario > alto - margen) {
+          doc.addPage();
+          y = margen;
+        }
+      };
+      const divisor = () => {
+        doc.setDrawColor(...linea);
+        doc.setLineWidth(0.3);
+        doc.line(margen, y, derecha, y);
+        y += 5;
+      };
+      const campo = (etiqueta: string, valor: string) => {
+        doc.setFont('helvetica', 'bold');
+        doc.text(etiqueta, margen, y);
+        doc.setFont('helvetica', 'normal');
+        doc.text(valor, margen + 24, y);
+        y += 6;
+      };
+
+      doc.setFillColor(...acento);
+      doc.rect(0, 0, ancho, 3, 'F');
+
+      y = 16;
+      doc.setTextColor(...tinta);
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(14);
-      doc.text('FashionStore', 105, y, { align: 'center' });
-      y += 8;
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(11);
-      doc.text(`Comprobante: ${comprobante.numero_temporal}`, 14, y); y += 6;
-      doc.text(`Tipo: ${comprobante.tipo}`, 14, y); y += 6;
-      doc.text(`Fecha: ${comprobante.created_at}`, 14, y); y += 8;
-      doc.setFontSize(10);
-      for (const linea of comprobante.detalle) {
-        const cortada = doc.splitTextToSize(linea, 182);
-        doc.text(cortada, 14, y);
-        y += cortada.length * 5 + 2;
-      }
-      y += 2;
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(12);
-      doc.text(`Total: ${comprobante.moneda} ${comprobante.total.toFixed(2)}`, 196, y, { align: 'right' });
-      y += 8;
+      doc.setFontSize(18);
+      doc.text('FashionStore', centro, y, { align: 'center' });
+      y += 6;
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(9);
-      doc.text(doc.splitTextToSize(comprobante.leyenda, 182), 105, y, { align: 'center' });
+      doc.setTextColor(...gris);
+      doc.text('Comprobante temporal · operación offline', centro, y, { align: 'center' });
+      y += 8;
+      divisor();
+
+      doc.setFontSize(10);
+      doc.setTextColor(...tinta);
+      campo('N°:', comprobante.numero_temporal);
+      campo('Tipo:', comprobante.tipo);
+      campo('Fecha:', this.formatearFecha(comprobante.created_at));
+      if (comprobante.sucursal_id != null) campo('Sucursal:', String(comprobante.sucursal_id));
+      y += 2;
+      divisor();
+
+      doc.setFontSize(9.5);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(...tinta);
+      for (const detalle of comprobante.detalle) {
+        const cortada = doc.splitTextToSize(detalle, util);
+        saltoSiHaceFalta(cortada.length * 4.6 + 2);
+        doc.text(cortada, margen, y);
+        y += cortada.length * 4.6 + 2;
+      }
+      y += 2;
+      saltoSiHaceFalta(16);
+      divisor();
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(13);
+      doc.setTextColor(...tinta);
+      doc.text('TOTAL', margen, y);
+      doc.setTextColor(...acento);
+      doc.text(`${comprobante.moneda} ${comprobante.total.toFixed(2)}`, derecha, y, { align: 'right' });
+      y += 9;
+
+      saltoSiHaceFalta(14);
+      doc.setFont('helvetica', 'italic');
+      doc.setFontSize(8.5);
+      doc.setTextColor(...gris);
+      const leyenda = doc.splitTextToSize(comprobante.leyenda, util);
+      doc.text(leyenda, centro, y, { align: 'center' });
+      y += leyenda.length * 4 + 6;
+
+      saltoSiHaceFalta(10);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.5);
+      doc.setTextColor(...gris);
+      doc.text(`UUID ${comprobante.uuid_offline}`, centro, y, { align: 'center' });
+      y += 4;
+      doc.text('Documento generado sin conexión · válido al sincronizar', centro, y, { align: 'center' });
+
       doc.save(`${comprobante.numero_temporal}.pdf`);
       return true;
     } catch {
       return false;
     }
+  }
+
+  private formatearFecha(iso: string): string {
+    const fecha = new Date(iso);
+    if (Number.isNaN(fecha.getTime())) return iso;
+    return fecha.toLocaleString('es-BO', {
+      day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
+    });
   }
 
   async marcarReemplazado(uuidOffline: string, reemplazo?: string | null): Promise<ComprobanteLocal | null> {

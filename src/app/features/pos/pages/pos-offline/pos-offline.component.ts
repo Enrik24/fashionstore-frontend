@@ -89,8 +89,12 @@ interface LineaPosOffline {
               <button type="button" class="btn btn-outline btn-sm" (click)="imprimir(comp)">
                 <i class="ri-printer-line"></i> Imprimir
               </button>
-              <button type="button" class="btn btn-outline btn-sm" (click)="descargar(comp)">
-                <i class="ri-download-2-line"></i> Descargar
+              <button type="button" class="btn btn-outline btn-sm" [disabled]="descargando()" (click)="descargar(comp)">
+                @if (descargando()) {
+                  <i class="ri-loader-4-line spin-icon"></i> Generando…
+                } @else {
+                  <i class="ri-download-2-line"></i> Descargar
+                }
               </button>
               <a routerLink="/offline/sincronizacion" class="btn btn-outline btn-sm">
                 <i class="ri-loop-left-line"></i> Ver cola
@@ -127,8 +131,8 @@ interface LineaPosOffline {
                       [class.selected]="productoSeleccionado()?.id === producto.id"
                       (click)="seleccionarProducto(producto)"
                     >
-                      @if (producto.imagenes[0]) {
-                        <img [src]="producto.imagenes[0]" [alt]="producto.nombre" />
+                      @if (producto.imagenes[0] && !imagenesFallidas().has(producto.id)) {
+                        <img [src]="producto.imagenes[0]" [alt]="producto.nombre" (error)="marcarImagenError(producto.id)" />
                       } @else {
                         <span class="producto-placeholder"><i class="ri-t-shirt-2-line"></i></span>
                       }
@@ -341,6 +345,8 @@ export class PosOfflineComponent implements OnInit {
   montoRecibido = 0;
   cambio = signal(0);
   procesando = signal(false);
+  descargando = signal(false);
+  imagenesFallidas = signal<Set<number>>(new Set());
   error = signal<string | null>(null);
   comprobante = signal<ComprobanteLocal | null>(null);
   uuidVenta = signal<string | null>(null);
@@ -544,9 +550,19 @@ export class PosOfflineComponent implements OnInit {
   }
 
   async descargar(comprobante: ComprobanteLocal): Promise<void> {
-    if (!(await this.documents.descargar(comprobante))) {
-      this.toast.warning('No se pudo generar el archivo del comprobante.', 'Descarga no disponible');
+    if (this.descargando()) return;
+    this.descargando.set(true);
+    try {
+      if (!(await this.documents.descargar(comprobante))) {
+        this.toast.warning('No se pudo generar el archivo del comprobante.', 'Descarga no disponible');
+      }
+    } finally {
+      this.descargando.set(false);
     }
+  }
+
+  marcarImagenError(productoId: number): void {
+    this.imagenesFallidas.update((fallidas) => new Set(fallidas).add(productoId));
   }
 
   private async cargarSucursales(): Promise<void> {

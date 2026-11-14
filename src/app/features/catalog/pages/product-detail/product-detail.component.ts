@@ -9,7 +9,10 @@ import { ToastService } from '../../../../core/services/toast.service';
 import { AuthService } from '../../../../core/services/auth.service';
 import { StockWebSocketService } from '../../../../core/services/stock-websocket.service';
 import { Producto, VarianteProducto, Talla, Color } from '../../../../core/models/catalog.model';
+import { ProductoOffline, VarianteOffline } from '../../../../core/models/offline.model';
 import { DisponibilidadSucursal, DisponibilidadProductoResponse } from '../../../../core/models/public-catalog.model';
+import { ConnectivityService } from '../../../../core/offline/connectivity.service';
+import { OfflineCatalogService } from '../../../../core/offline/offline-catalog.service';
 import { StockAvailabilityComponent } from '../../components/stock-availability/stock-availability.component';
 import { ReservationModalComponent } from '../../components/reservation-modal/reservation-modal.component';
 import { ProductCardComponent } from '../../components/product-card/product-card.component';
@@ -40,6 +43,18 @@ import { ActivePromotionsService } from '../../../../core/services/active-promot
             <i class="ri-arrow-left-line"></i> Volver al Catálogo
           </a>
         </div>
+
+        <!-- [EXAMEN-2] CU05/CU15: ficha servida desde IndexedDB sin conexión -->
+        @if (modoOffline()) {
+          <div class="offline-banner">
+            <i class="ri-wifi-off-line"></i>
+            <div>
+              <strong>Modo offline.</strong>
+              Datos descargados{{ selloOffline() ? ' el ' + (selloOffline() | date:'short') : '' }}.
+              Precio y stock son referenciales; puedes añadir al carrito y el pago se completará al recuperar la conexión.
+            </div>
+          </div>
+        }
 
         @if (loading()) {
           <div class="loading-state">
@@ -248,6 +263,12 @@ import { ActivePromotionsService } from '../../../../core/services/active-promot
                     <span>Variante seleccionada: <strong>{{ selectedVariant.sku_variante || product.sku }}</strong></span>
                   </div>
                 }
+                @if (modoOffline() && stockLocalVariante() !== null) {
+                  <div class="stock-local-note">
+                    <i class="ri-archive-line"></i>
+                    Stock referencial: {{ stockLocalVariante() }} unidades (última descarga)
+                  </div>
+                }
 
                 <!-- Quantity & Actions -->
                 <div class="actions-row">
@@ -271,19 +292,21 @@ import { ActivePromotionsService } from '../../../../core/services/active-promot
                 </div>
               </div>
 
-              <!-- Branch Availability -->
-              <app-stock-availability 
-                [branchList]="branchAvailability" 
-                [loading]="loadingAvailability"
-                [wsConnected]="isWsConnected"
-                [availableSizes]="availableSizes"
-                [availableColors]="availableColors"
-                [selectedSize]="selectedSize"
-                [selectedColor]="selectedColor"
-                (selectBranch)="openReservationModal($event)"
-                (selectSize)="onSelectSize($event)"
-                (selectColor)="onSelectColor($event)"
-              ></app-stock-availability>
+              <!-- Branch Availability (solo en línea; offline se muestra stock referencial) -->
+              @if (!modoOffline()) {
+                <app-stock-availability
+                  [branchList]="branchAvailability"
+                  [loading]="loadingAvailability"
+                  [wsConnected]="isWsConnected"
+                  [availableSizes]="availableSizes"
+                  [availableColors]="availableColors"
+                  [selectedSize]="selectedSize"
+                  [selectedColor]="selectedColor"
+                  (selectBranch)="openReservationModal($event)"
+                  (selectSize)="onSelectSize($event)"
+                  (selectColor)="onSelectColor($event)"
+                ></app-stock-availability>
+              }
             </div>
           </div>
 
@@ -299,15 +322,17 @@ import { ActivePromotionsService } from '../../../../core/services/active-promot
             </div>
           }
 
-          <!-- CU26: Sección de valoraciones del producto -->
-          <div class="reviews-wrapper">
-            <app-product-reviews
-              [productoId]="product.id"
-              [promedioValoracion]="product.promedio_valoracion || 0"
-              [totalValoraciones]="product.total_valoraciones || 0"
-              (cambioValoraciones)="onValoracionesCambiadas()"
-            ></app-product-reviews>
-          </div>
+          <!-- CU26: Sección de valoraciones del producto (requiere conexión) -->
+          @if (!modoOffline()) {
+            <div class="reviews-wrapper">
+              <app-product-reviews
+                [productoId]="product.id"
+                [promedioValoracion]="product.promedio_valoracion || 0"
+                [totalValoraciones]="product.total_valoraciones || 0"
+                (cambioValoraciones)="onValoracionesCambiadas()"
+              ></app-product-reviews>
+            </div>
+          }
         }
       </div>
 
@@ -336,6 +361,30 @@ import { ActivePromotionsService } from '../../../../core/services/active-promot
 
     .detail-nav {
       margin-bottom: 1.5rem;
+    }
+
+    .offline-banner {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      background: #fffbeb;
+      border: 1px solid #fcd34d;
+      color: #92400e;
+      border-radius: var(--radius-md);
+      padding: 0.75rem 1rem;
+      margin-bottom: 1.5rem;
+      font-size: 0.875rem;
+
+      i { font-size: 1.25rem; flex-shrink: 0; }
+    }
+
+    .stock-local-note {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.8125rem;
+      color: var(--text-muted);
+      margin-top: 0.5rem;
     }
 
     .back-link {
@@ -845,6 +894,8 @@ export class ProductDetailComponent implements OnInit, OnDestroy {
   public authService = inject(AuthService);
   private favoritesService = inject(FavoritesService);
   private promotionsService = inject(ActivePromotionsService);
+  private connectivity = inject(ConnectivityService);
+  private offlineCatalog = inject(OfflineCatalogService);
 
   public product: Producto | null = null;
   public relatedProducts: Producto[] = [];
@@ -862,8 +913,12 @@ export class ProductDetailComponent implements OnInit, OnDestroy {
   public loadingAvailability: boolean = false;
   public isWsConnected: boolean = false;
   public addingToCart: boolean = false;
+  public modoOffline = signal<boolean>(false);
+  public selloOffline = signal<string | null>(null);
+  public stockLocalVariante = signal<number | null>(null);
 
   private subscriptions: Subscription[] = [];
+  private quitarListenerConexion: (() => void) | null = null;
 
   // Reservation Modal State
   public showReservationModal: boolean = false;
@@ -871,6 +926,11 @@ export class ProductDetailComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.promotionsService.load();
+
+    // [EXAMEN-2] Al recuperar la red, recargar la ficha en línea si estábamos offline.
+    this.quitarListenerConexion = this.connectivity.alRecuperarConexion(() => {
+      if (this.modoOffline() && this.product) this.loadProduct(this.product.id);
+    });
 
     // Escuchar actualizaciones en tiempo real del WebSocket
     this.subscriptions.push(
@@ -909,15 +969,25 @@ export class ProductDetailComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this.stockWs.disconnect();
     this.subscriptions.forEach(s => s.unsubscribe());
+    this.quitarListenerConexion?.();
   }
 
   loadProduct(id: number): void {
     this.loading.set(true);
+
+    // [EXAMEN-2] CU05/CU15: sin conexión se sirve la ficha descargada en IndexedDB.
+    if (!this.connectivity.enLinea()) {
+      void this.cargarProductoLocal(id);
+      return;
+    }
+
     this.catalogService.getProductDetail(id).subscribe({
       next: (prod) => {
         this.product = prod;
         this.selectedImage = prod.imagenes?.[0] || '';
         this.extractSizesAndColors(prod);
+        this.modoOffline.set(false);
+        this.stockLocalVariante.set(null);
         this.loading.set(false);
         // Conectar WebSocket para este producto
         this.stockWs.connect(id);
@@ -929,11 +999,85 @@ export class ProductDetailComponent implements OnInit, OnDestroy {
         }
       },
       error: () => {
-        this.loading.set(false);
-        this.toast.error('No se pudo cargar la información del producto');
-        this.router.navigate(['/catalog']);
+        // El backend no respondió: intentar con los datos locales antes de rendirse.
+        void this.cargarProductoLocal(id);
       }
     });
+  }
+
+  /** [EXAMEN-2] Ficha local: producto, variantes y stock referenciales desde IndexedDB. */
+  private async cargarProductoLocal(id: number): Promise<void> {
+    try {
+      const local = await this.offlineCatalog.obtenerProducto(id);
+      if (!local) {
+        this.sinDatosOffline();
+        return;
+      }
+      const variantes = await this.offlineCatalog.variantesDeProducto(id);
+      const producto = this.aProductoDetalle(local, variantes);
+      this.product = producto;
+      this.selectedImage = producto.imagenes?.[0] || '';
+      this.extractSizesAndColors(producto);
+      this.relatedProducts = [];
+      this.branchAvailability = [];
+      this.modoOffline.set(true);
+      this.selloOffline.set(await this.offlineCatalog.selloActual());
+      void this.actualizarStockLocal();
+    } catch {
+      this.sinDatosOffline();
+    } finally {
+      this.loading.set(false);
+    }
+  }
+
+  private sinDatosOffline(): void {
+    this.loading.set(false);
+    this.toast.error('Este producto no está en los datos offline. Conéctate y actualiza la descarga.');
+    this.router.navigate(['/catalog']);
+  }
+
+  private aProductoDetalle(p: ProductoOffline, variantes: VarianteOffline[]): Producto {
+    return {
+      id: p.id,
+      sku: p.sku,
+      nombre: p.nombre,
+      descripcion: p.descripcion ?? '',
+      precio: p.precio,
+      imagenes: p.imagenes ?? [],
+      estado: (p.estado as Producto['estado']) || 'ACTIVO',
+      genero: (p.genero as Producto['genero']) || undefined,
+      categoria_id: p.categoria_id ?? 0,
+      categoria: p.categoria ? { id: p.categoria_id ?? 0, nombre: p.categoria } : undefined,
+      temporada_id: p.temporada_id ?? undefined,
+      temporada: p.temporada
+        ? { id: p.temporada_id ?? 0, nombre: p.temporada, fecha_inicio: '', fecha_fin: '' }
+        : undefined,
+      tenant_id: p.tenant_id,
+      variantes: variantes.map((v) => this.aVariante(v))
+    };
+  }
+
+  private aVariante(v: VarianteOffline): VarianteProducto {
+    return {
+      id: v.id,
+      producto_id: v.producto_id,
+      talla_id: v.talla_id ?? null,
+      color_id: v.color_id ?? 0,
+      sku_variante: v.sku_variante,
+      precio_variante: v.precio_variante ?? v.precio,
+      talla: v.talla_id != null ? { id: v.talla_id, valor: v.talla ?? '', nombre: v.talla ?? '' } : null,
+      color: v.color_id != null ? { id: v.color_id, nombre: v.color ?? '' } : undefined,
+      tenant_id: v.tenant_id
+    };
+  }
+
+  private async actualizarStockLocal(): Promise<void> {
+    if (!this.modoOffline() || !this.selectedVariant) {
+      this.stockLocalVariante.set(null);
+      return;
+    }
+    const stock = await this.offlineCatalog.stockLocal(this.selectedVariant.id);
+    this.stockLocalVariante.set(stock?.cantidad_disponible ?? null);
   }
 
   extractSizesAndColors(product: Producto): void {
@@ -976,6 +1120,8 @@ export class ProductDetailComponent implements OnInit, OnDestroy {
       const matchColor = this.selectedColor ? v.color_id === this.selectedColor.id : true;
       return matchSize && matchColor;
     }) || this.product.variantes[0] || null;
+
+    if (this.modoOffline()) void this.actualizarStockLocal();
   }
 
   loadAvailability(productId: number, tallaId?: number, colorId?: number): void {
@@ -996,7 +1142,7 @@ export class ProductDetailComponent implements OnInit, OnDestroy {
   }
 
   refreshAvailability(): void {
-    if (!this.product) return;
+    if (!this.product || this.modoOffline()) return;
     const tallaId = this.selectedVariant?.talla_id ?? undefined;
     const colorId = this.selectedVariant?.color_id ?? undefined;
 
