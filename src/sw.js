@@ -11,7 +11,7 @@
  * Los datos autenticados de negocio NO se cachean aquí: viven cifrados en
  * IndexedDB (ver `core/offline/indexed-db.service.ts`).
  */
-const CACHE_VERSION = 'fashionstore-v1';
+const CACHE_VERSION = 'fashionstore-v2';
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const ASSETS_CACHE = `${CACHE_VERSION}-assets`;
 const PUBLIC_API_CACHE = `${CACHE_VERSION}-public-api`;
