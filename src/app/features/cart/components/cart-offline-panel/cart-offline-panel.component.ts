@@ -121,7 +121,9 @@ export class CartOfflinePanelComponent {
       const user = this.auth.currentUserSignal();
       const conversion = await this.cartService.confirmarCompraOffline({
         aceptaNuevoTotal: true,
-        clienteId: user?.id ?? null,
+        // Offline no se conoce el id del perfil de cliente; el backend lo
+        // resuelve desde el usuario de la operación (evita FK cliente_id).
+        clienteId: null,
         sucursalId: user?.sucursal_id ?? null
       });
       this.conversion.set(conversion);
