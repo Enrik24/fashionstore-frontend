@@ -398,9 +398,19 @@ export class SyncEngineService {
         });
         break;
       default:
-        await this.queue.marcarPendiente(item.uuid_operacion, item.motivo ?? null);
+        await this.queue.marcarPendiente(
+          item.uuid_operacion,
+          this.motivoConDetalle(item)
+        );
         break;
     }
+  }
+
+  /** Conserva el detalle real del servidor (p. ej. error de BD) en la cola. */
+  private motivoConDetalle(item: ResultadoOperacion): string {
+    const motivo = item.motivo ?? 'Operación pendiente de sincronización';
+    const detalle = (item.datos_resultado as { detalle?: string } | null)?.detalle;
+    return detalle ? `${motivo}: ${detalle}` : motivo;
   }
 
   private programarPorVisibilidad(): void {
