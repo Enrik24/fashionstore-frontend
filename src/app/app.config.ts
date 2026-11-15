@@ -1,5 +1,5 @@
 import { ApplicationConfig } from '@angular/core';
-import { provideRouter, withComponentInputBinding, withViewTransitions } from '@angular/router';
+import { PreloadAllModules, provideRouter, withComponentInputBinding, withPreloading, withViewTransitions } from '@angular/router';
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { provideAnimations } from '@angular/platform-browser/animations';
 
@@ -14,7 +14,9 @@ import { retryInterceptor } from './core/interceptors/retry.interceptor';
 
 export const appConfig: ApplicationConfig = {
   providers: [
-    provideRouter(routes, withComponentInputBinding(), withViewTransitions()),
+    // [EXAMEN-2] Precarga los chunks lazy con conexión para que rutas nunca
+    // visitadas (p. ej. el detalle de producto) también abran sin conexión.
+    provideRouter(routes, withComponentInputBinding(), withViewTransitions(), withPreloading(PreloadAllModules)),
     provideHttpClient(
       withInterceptors([
         // [EXAMEN-2] Orden del capítulo 6.3 del plan de frontend.
