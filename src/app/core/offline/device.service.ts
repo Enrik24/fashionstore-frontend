@@ -48,9 +48,13 @@ export class DeviceService {
         const detalle = String(error?.error?.detail ?? '');
         const codigo = String((error?.error as any)?.codigo ?? '');
         const revocado = /revocado/i.test(detalle) || /revocado/i.test(codigo) || String(error?.status) === '403';
-        if (!revocado) return throwError(() => error);
+        // El UUID es por navegador pero el registro por usuario: si otra cuenta
+        // usó este navegador, el UUID pertenece a ese otro usuario y el backend
+        // responde 404. Se estrena un UUID propio para la cuenta actual.
+        const ajeno = String(error?.status) === '404' && /dispositivo no encontrado/i.test(detalle);
+        if (!revocado && !ajeno) return throwError(() => error);
 
-        // RN-019: el UUID anterior quedó revocado; se estrena uno nuevo.
+        // RN-019: el UUID anterior quedó revocado o pertenece a otra cuenta.
         const reemplazo = this.generarUuid();
         this.storage.setDispositivoId(reemplazo);
         return this.http.post<DispositivoSincronizacion>(`${this.API_URL}/dispositivos`, {

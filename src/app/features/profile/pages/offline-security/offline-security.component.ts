@@ -68,6 +68,13 @@ import { SectionTitleComponent } from '../../../../shared/components/section-tit
             El PIN debe tener exactamente 6 dígitos. Se guarda como hash con sal y nunca en texto plano.
           </p>
 
+          @if (!enLinea()) {
+            <div class="nota">
+              <i class="ri-wifi-off-line"></i>
+              <span>Sin conexión: el PIN se configura o cambia con internet (el backend valida tu contraseña). Reconéctate para continuar.</span>
+            </div>
+          }
+
           <form (ngSubmit)="guardarPin()" #formPin="ngForm" novalidate>
             @if (pinConfigurado()) {
               <div class="campo">
@@ -105,11 +112,11 @@ import { SectionTitleComponent } from '../../../../shared/components/section-tit
 
             <div class="acciones">
               @if (pinConfigurado()) {
-                <button type="button" class="btn btn-outline danger" (click)="eliminarPin()" [disabled]="guardando()">
+                <button type="button" class="btn btn-outline danger" (click)="eliminarPin()" [disabled]="guardando() || !enLinea()">
                   <i class="ri-delete-bin-line"></i> Eliminar PIN
                 </button>
               }
-              <button type="submit" class="btn btn-accent" [disabled]="guardando() || formPin.invalid">
+              <button type="submit" class="btn btn-accent" [disabled]="guardando() || formPin.invalid || !enLinea()">
                 <i class="ri-save-3-line"></i>
                 {{ guardando() ? 'Guardando…' : (pinConfigurado() ? 'Cambiar PIN' : 'Configurar PIN') }}
               </button>
@@ -289,6 +296,10 @@ export class OfflineSecurityComponent implements OnInit {
     this.error.set(null);
     this.mensaje.set(null);
 
+    if (!this.enLinea()) {
+      this.error.set('Sin conexión: el PIN se configura con internet. Reconéctate e inténtalo de nuevo.');
+      return;
+    }
     if (!/^\d{6}$/.test(this.pinNuevo)) {
       this.error.set('El PIN debe tener exactamente 6 dígitos.');
       return;
@@ -328,6 +339,10 @@ export class OfflineSecurityComponent implements OnInit {
   }
 
   public eliminarPin(): void {
+    if (!this.enLinea()) {
+      this.error.set('Sin conexión: el PIN se elimina con internet. Reconéctate e inténtalo de nuevo.');
+      return;
+    }
     if (!confirm('¿Eliminar el PIN? No podrás acceder sin conexión hasta configurarlo de nuevo.')) return;
     this.guardando.set(true);
     this.offlineSession.eliminarPin().subscribe({
@@ -415,6 +430,7 @@ export class OfflineSecurityComponent implements OnInit {
   }
 
   private mensajeError(err: any): string {
+    if (err?.status === 0) return 'Sin conexión: no se pudo contactar al backend. Reconéctate e inténtalo de nuevo.';
     const detalle = err?.error?.detail ?? err?.error?.message;
     if (typeof detalle === 'string') return detalle;
     if (Array.isArray(detalle) && detalle.length) return String(detalle[0]?.msg ?? 'Revisa los datos.');
