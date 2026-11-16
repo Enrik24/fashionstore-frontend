@@ -7,6 +7,7 @@ import { IndexedDbService } from './indexed-db.service';
 import { OfflineAuditService } from './offline-audit.service';
 import { OfflineQueueService } from './offline-queue.service';
 import { OfflineSessionService } from './offline-session.service';
+import { PendingPaymentService } from './pending-payment.service';
 import { SyncEngineService } from './sync-engine.service';
 import { OfflineApiService } from '../services/offline-api.service';
 import { StockWebSocketService } from '../services/stock-websocket.service';
@@ -100,7 +101,8 @@ describe('SyncEngineService - sincronización por lotes', () => {
         { provide: ConflictService, useValue: conflictos },
         { provide: OfflineAuditService, useValue: auditoria.servicio },
         { provide: StockWebSocketService, useValue: websocket },
-        { provide: OfflineSessionService, useValue: { tokenOffline: () => 'token-offline' } }
+        { provide: OfflineSessionService, useValue: { tokenOffline: () => 'token-offline' } },
+        { provide: PendingPaymentService, useValue: { registrarAceptacionRequerida: async () => undefined } }
       ]
     });
 

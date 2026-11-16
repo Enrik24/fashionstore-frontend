@@ -197,7 +197,8 @@ describe('OfflineCartService - carrito local y conversión', () => {
         uuid_carrito: 'carrito-1',
         uuid_orden: conversion.orden.uuid_orden,
         uuid_pago: conversion.pago.uuid_pago,
-        acepta_nuevo_total: true,
+        // RN-007: sin aceptación explícita no se acepta el total del servidor.
+        acepta_nuevo_total: false,
         direccion_envio: 'Av. Siempre Viva 123',
         items: [jasmine.objectContaining({ variante_producto_id: 101, cantidad: 1 })]
       }),

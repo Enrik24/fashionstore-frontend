@@ -13,6 +13,7 @@ import { OfflineQueueService } from './offline-queue.service';
 import { ConflictService } from './conflict.service';
 import { OfflineAuditService } from './offline-audit.service';
 import { OfflineSessionService } from './offline-session.service';
+import { PendingPaymentService } from './pending-payment.service';
 
 export type EstadoMotorSync = 'IDLE' | 'SINCRONIZANDO' | 'ERROR' | 'SIN_RED';
 
@@ -54,6 +55,7 @@ export class SyncEngineService {
   private storage = inject(StorageService);
   private websocket = inject(StockWebSocketService);
   private offlineSession = inject(OfflineSessionService);
+  private pendingPayment = inject(PendingPaymentService);
 
   public estado = signal<EstadoMotorSync>(this.connectivity.enLinea() ? 'IDLE' : 'SIN_RED');
   public progreso = signal<ProgresoSincronizacion>({ enviadas: 0, total: 0 });
@@ -384,6 +386,16 @@ export class SyncEngineService {
           item.motivo ?? 'Operación rechazada por el servidor',
           detalle
         );
+        if (detalle['requiere_aceptacion'] === true) {
+          // RN-007: el precio cambió; el usuario debe aceptar el nuevo total
+          // antes de que el pedido pueda confirmarse y cobrarse.
+          await this.pendingPayment.registrarAceptacionRequerida(item.uuid_operacion, detalle);
+          await this.audit.registrar({
+            tipo: 'CONFLICTO',
+            mensaje: 'El servidor actualizó los precios: se requiere aceptar el nuevo total.',
+            detalle: { uuid_operacion: item.uuid_operacion }
+          });
+        }
         break;
       case 'CONFLICTO':
         await this.queue.marcarConflicto(item.uuid_operacion, {

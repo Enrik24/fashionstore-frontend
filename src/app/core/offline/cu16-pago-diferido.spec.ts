@@ -9,6 +9,7 @@ import { OfflineQueueService } from './offline-queue.service';
 import { OfflineSessionService } from './offline-session.service';
 import { PendingPaymentService } from './pending-payment.service';
 import { PagosDiferidosApiService } from '../services/pagos-diferidos-api.service';
+import { OfflineApiService } from '../services/offline-api.service';
 import { StockWebSocketService } from '../services/stock-websocket.service';
 import { StorageService } from '../services/storage.service';
 import { ToastService } from '../services/toast.service';
@@ -85,6 +86,7 @@ describe('CU16 - Confirmación de pago diferido', () => {
         { provide: StorageService, useValue: crearStorageFalso() },
         { provide: ConnectivityService, useValue: conectividad.servicio },
         { provide: PagosDiferidosApiService, useValue: api },
+        { provide: OfflineApiService, useValue: { reintentarOperacion: () => of({ estado: 'CONFIRMADA' }) } },
         { provide: OfflineAuditService, useValue: crearAuditoriaFalsa().servicio },
         { provide: StockWebSocketService, useValue: websocket },
         { provide: OfflineSessionService, useValue: { tokenOffline: () => 'token-offline' } }

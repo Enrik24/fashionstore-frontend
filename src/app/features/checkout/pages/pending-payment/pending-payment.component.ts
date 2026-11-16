@@ -5,7 +5,7 @@ import { PendingPaymentService, PreparacionPago } from '../../../../core/offline
 import { ConnectivityService } from '../../../../core/offline/connectivity.service';
 import { ToastService } from '../../../../core/services/toast.service';
 import { environment } from '../../../../../environments/environment';
-import { PagoLocal } from '../../../../core/models/offline.model';
+import { OrdenLocal, PagoLocal } from '../../../../core/models/offline.model';
 import { PagoDiferido } from '../../../../core/models/pago-diferido.model';
 import { PaymentStatusChipComponent } from '../../../../shared/components/payment-status-chip/payment-status-chip.component';
 import { ExpiryCountdownComponent } from '../../../../shared/components/expiry-countdown/expiry-countdown.component';
@@ -43,6 +43,61 @@ import { ExpiryCountdownComponent } from '../../../../shared/components/expiry-c
               <p>{{ error() }}</p>
               <button type="button" class="btn btn-outline btn-sm" (click)="cargar()">Reintentar</button>
             </div>
+          </div>
+        } @else if (ordenLocal()?.requiere_aceptacion) {
+          <div class="card aceptacion-card">
+            <h2><i class="ri-price-tag-3-line"></i> El total de tu pedido cambió</h2>
+            <p>
+              El servidor actualizó los precios desde que guardaste el pedido sin conexión.
+              El precio central prevalece (RN-007): acepta el nuevo total para continuar o
+              cancela el pedido sin ningún cobro.
+            </p>
+            <div class="totales-comparacion">
+              <div>
+                <span>Total guardado offline</span>
+                <strong>{{ moneda() }} {{ ordenLocal()?.total_anterior | number:'1.2-2' }}</strong>
+              </div>
+              <div class="total-nuevo">
+                <span>Nuevo total del servidor</span>
+                <strong>{{ moneda() }} {{ ordenLocal()?.total_nuevo | number:'1.2-2' }}</strong>
+              </div>
+            </div>
+            @if (ordenLocal()?.diferencias?.length) {
+              <ul class="diferencias-lista">
+                @for (dif of ordenLocal()?.diferencias ?? []; track $index) {
+                  <li>
+                    <span><i class="ri-shirt-line"></i> Variante #{{ dif.variante_producto_id }}</span>
+                    <span>{{ dif.precio_local | number:'1.2-2' }} → {{ dif.precio_central | number:'1.2-2' }}</span>
+                  </li>
+                }
+              </ul>
+            }
+            @if (!enLinea()) {
+              <div class="aviso aviso-warning">
+                <i class="ri-wifi-off-line"></i>
+                <p>Necesitas conexión para aceptar el nuevo total.</p>
+              </div>
+            }
+            <button
+              type="button"
+              class="btn btn-accent btn-lg btn-block"
+              [disabled]="procesando() || !enLinea()"
+              (click)="aceptarNuevoTotal()"
+            >
+              @if (procesando()) {
+                <i class="ri-loader-4-line spin-icon"></i> Procesando…
+              } @else {
+                <i class="ri-checkbox-circle-line"></i> Aceptar nuevo total y continuar
+              }
+            </button>
+            <button
+              type="button"
+              class="btn btn-outline btn-block"
+              [disabled]="procesando()"
+              (click)="rechazarNuevoTotal()"
+            >
+              <i class="ri-close-line"></i> No aceptar y cancelar pedido
+            </button>
           </div>
         } @else {
           <div class="pago-grid">
@@ -129,22 +184,39 @@ import { ExpiryCountdownComponent } from '../../../../shared/components/expiry-c
                   </div>
                 }
 
-                <button
-                  type="button"
-                  class="btn btn-accent btn-lg btn-block"
-                  [disabled]="procesando() || !enLinea()"
-                  (click)="confirmar()"
-                >
-                  @if (procesando()) {
-                    <i class="ri-loader-4-line spin-icon"></i> Verificando…
-                  } @else {
-                    <i class="ri-shield-check-line"></i> Confirmar pago
-                  }
-                </button>
-
                 @if (checkoutUrl()) {
-                  <button type="button" class="btn btn-outline btn-block" [disabled]="procesando()" (click)="redirigir()">
-                    <i class="ri-external-link-line"></i> Ir al checkout seguro
+                  <button
+                    type="button"
+                    class="btn btn-accent btn-lg btn-block"
+                    [disabled]="procesando()"
+                    (click)="redirigir()"
+                  >
+                    <i class="ri-secure-payment-line"></i> Pagar en el checkout seguro
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn-outline btn-block"
+                    [disabled]="procesando() || !enLinea()"
+                    (click)="confirmar()"
+                  >
+                    @if (procesando()) {
+                      <i class="ri-loader-4-line spin-icon"></i> Verificando…
+                    } @else {
+                      <i class="ri-shield-check-line"></i> Ya pagué, verificar pago
+                    }
+                  </button>
+                } @else {
+                  <button
+                    type="button"
+                    class="btn btn-accent btn-lg btn-block"
+                    [disabled]="procesando() || !enLinea()"
+                    (click)="confirmar()"
+                  >
+                    @if (procesando()) {
+                      <i class="ri-loader-4-line spin-icon"></i> Verificando…
+                    } @else {
+                      <i class="ri-shield-check-line"></i> Confirmar pago
+                    }
                   </button>
                 }
 
@@ -205,6 +277,16 @@ import { ExpiryCountdownComponent } from '../../../../shared/components/expiry-c
     .aviso-info { background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; }
     .client-secret { display: flex; flex-direction: column; gap: 0.15rem; font-size: 0.7rem; color: #64748b; }
     .client-secret code { background: #0f172a; color: #e2e8f0; border-radius: 0.4rem; padding: 0.35rem 0.5rem; font-size: 0.7rem; overflow: hidden; text-overflow: ellipsis; }
+    .aceptacion-card { padding: 1.4rem 1.5rem; display: flex; flex-direction: column; gap: 0.75rem; max-width: 640px; margin: 0 auto; width: 100%; }
+    .aceptacion-card h2 { margin: 0; font-size: 1.05rem; color: var(--primary); display: inline-flex; align-items: center; gap: 0.4rem; }
+    .aceptacion-card > p { margin: 0; font-size: 0.82rem; color: #475569; }
+    .totales-comparacion { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
+    .totales-comparacion > div { display: flex; flex-direction: column; gap: 0.2rem; background: #f8fafc; border-radius: 0.7rem; padding: 0.8rem 0.9rem; }
+    .totales-comparacion span { font-size: 0.72rem; color: #64748b; }
+    .totales-comparacion strong { font-size: 1.25rem; color: var(--primary); }
+    .totales-comparacion .total-nuevo { background: #fffbeb; border: 1px solid #fcd34d; }
+    .diferencias-lista { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.35rem; font-size: 0.78rem; color: #475569; }
+    .diferencias-lista li { display: flex; justify-content: space-between; gap: 0.5rem; background: #f8fafc; border-radius: 0.5rem; padding: 0.45rem 0.6rem; }
     .btn-block { width: 100%; justify-content: center; }
     .ayuda-card ol { margin: 0; padding-left: 1.1rem; display: flex; flex-direction: column; gap: 0.35rem; font-size: 0.78rem; color: #475569; }
     .estado { padding: 2rem; display: flex; justify-content: center; align-items: center; gap: 0.5rem; color: #64748b; }
@@ -228,6 +310,7 @@ export class PendingPaymentComponent implements OnInit {
   error = signal<string | null>(null);
   preparacion = signal<PreparacionPago | null>(null);
   pago = signal<PagoLocal | PagoDiferido | null>(null);
+  ordenLocal = signal<OrdenLocal | null>(null);
   expirado = signal(false);
 
   async ngOnInit(): Promise<void> {
@@ -303,14 +386,60 @@ export class PendingPaymentComponent implements OnInit {
     this.error.set(null);
     try {
       this.pago.set(await this.pending.estado(uuid));
-      const preparacion = await this.pending.crearOConfirmarPago(uuid);
-      this.preparacion.set(preparacion);
-      if (preparacion.pago) this.pago.set(preparacion.pago);
+      const orden = await this.pending.ordenDePago(uuid);
+      this.ordenLocal.set(orden);
+      if (!orden?.requiere_aceptacion) {
+        const preparacion = await this.pending.crearOConfirmarPago(uuid);
+        this.preparacion.set(preparacion);
+        if (preparacion.pago) this.pago.set(preparacion.pago);
+      }
       this.expirado.set(this.estado() === 'EXPIRADO');
+      // Retorno del Checkout de Stripe: verificar el cobro contra el backend
+      // (el webhook firmado sigue siendo la fuente de verdad, RN-015).
+      if (this.route.snapshot.queryParamMap.get('retorno') === 'exito' && this.estado() !== 'CONFIRMADO') {
+        try {
+          this.pago.set(await this.pending.confirmarConStripe({ uuid_pago: uuid }));
+        } catch {
+          // El webhook puede confirmar después; se muestra el estado actual.
+        }
+      }
     } catch (error) {
       this.error.set(this.mensajeError(error));
     } finally {
       this.cargando.set(false);
+    }
+  }
+
+  async aceptarNuevoTotal(): Promise<void> {
+    const uuid = this.uuidPago();
+    if (!uuid) return;
+    this.procesando.set(true);
+    try {
+      const preparacion = await this.pending.aceptarNuevoTotal(uuid);
+      this.preparacion.set(preparacion);
+      if (preparacion.pago) this.pago.set(preparacion.pago);
+      this.ordenLocal.set(await this.pending.ordenDePago(uuid));
+      this.toast.success('Nuevo total aceptado. Completa el pago para confirmar tu pedido.', 'Total aceptado');
+    } catch (error) {
+      this.toast.error(this.mensajeError(error), 'No se pudo aceptar el nuevo total');
+      this.ordenLocal.set(await this.pending.ordenDePago(uuid));
+    } finally {
+      this.procesando.set(false);
+    }
+  }
+
+  async rechazarNuevoTotal(): Promise<void> {
+    const uuid = this.uuidPago();
+    if (!uuid) return;
+    this.procesando.set(true);
+    try {
+      await this.pending.rechazarNuevoTotal(uuid);
+      this.toast.info('Pedido cancelado. No se realizó ningún cobro.', 'Pedido cancelado');
+      await this.router.navigate(['/checkout/pago-expirado'], { queryParams: { uuidPago: uuid } });
+    } catch (error) {
+      this.toast.error(this.mensajeError(error), 'No se pudo cancelar el pedido');
+    } finally {
+      this.procesando.set(false);
     }
   }
 

@@ -269,7 +269,9 @@ export class OfflineCartService {
       uuid_pago: uuidPago,
       sucursal_id: orden.sucursal_id,
       cliente_id: orden.cliente_id,
-      acepta_nuevo_total: opciones.aceptaNuevoTotal ?? true,
+      // RN-007: no se acepta a ciegas el total del servidor; si los precios
+      // cambiaron, el usuario deberá aceptar el nuevo total al reconectar.
+      acepta_nuevo_total: opciones.aceptaNuevoTotal ?? false,
       direccion_envio: opciones.direccionEnvio,
       items: carrito.items.map((item) => ({
         variante_producto_id: item.variante_producto_id,

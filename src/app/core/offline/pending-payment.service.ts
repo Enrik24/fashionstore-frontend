@@ -14,6 +14,7 @@ import { IndexedDbService } from './indexed-db.service';
 import { ConnectivityService } from './connectivity.service';
 import { StorageService } from '../services/storage.service';
 import { PagosDiferidosApiService, FiltrosPagosDiferidos } from '../services/pagos-diferidos-api.service';
+import { OfflineApiService } from '../services/offline-api.service';
 import { OfflineQueueService } from './offline-queue.service';
 import { OfflineAuditService } from './offline-audit.service';
 import { StockWebSocketService } from '../services/stock-websocket.service';
@@ -64,6 +65,7 @@ export class PendingPaymentService {
   private connectivity = inject(ConnectivityService);
   private storage = inject(StorageService);
   private paymentsApi = inject(PagosDiferidosApiService);
+  private offlineApi = inject(OfflineApiService);
   private queue = inject(OfflineQueueService);
   private audit = inject(OfflineAuditService);
   private websocket = inject(StockWebSocketService);
@@ -217,6 +219,75 @@ export class PendingPaymentService {
     } catch {
       return this.obtenerLocal(uuidPago);
     }
+  }
+
+  /** Orden local asociada al pago (para el panel de aceptación, RN-007). */
+  async ordenDePago(uuidPago: string): Promise<OrdenLocal | null> {
+    const local = await this.obtenerLocal(uuidPago);
+    if (!local?.uuid_orden) return null;
+    return this.indexedDb.obtener<OrdenLocal>('ordenes_locales', local.uuid_orden);
+  }
+
+  /**
+   * [EXAMEN-2] RN-007: el usuario acepta el total recalculado por el servidor.
+   * Se reintenta la operación rechazada con `acepta_nuevo_total: true` (las
+   * operaciones RECHAZADAS no se reejecutan en un reenvío normal del lote).
+   */
+  async aceptarNuevoTotal(uuidPago: string): Promise<PreparacionPago> {
+    if (!this.connectivity.enLinea()) {
+      throw new Error('Necesitas conexión para aceptar el nuevo total.');
+    }
+    const local = await this.obtenerLocal(uuidPago);
+    if (!local) throw new Error('No se encontró el pago local.');
+    const operacion = await this.operacionDeOrden(local);
+    if (!operacion) throw new Error('No se encontró la operación de sincronización del pedido.');
+
+    const resultado = await this.primero(
+      this.offlineApi.reintentarOperacion(operacion.uuid_operacion, { acepta_nuevo_total: true })
+    );
+    const estado = String(resultado.estado ?? '').toUpperCase();
+    const detalle = (resultado.datos_resultado ?? {}) as Record<string, unknown>;
+
+    if (estado === 'CONFIRMADA' || estado === 'DUPLICADA') {
+      await this.queue.marcarConfirmada(operacion.uuid_operacion, detalle);
+      await this.limpiarAceptacion(local.uuid_orden ?? null);
+      await this.audit.registrar({
+        tipo: 'PAGO',
+        mensaje: 'Nuevo total del servidor aceptado; pedido confirmado.',
+        detalle: { uuid_pago: uuidPago, uuid_operacion: operacion.uuid_operacion }
+      });
+      return this.enviarPago(local);
+    }
+
+    await this.queue.marcarRechazada(
+      operacion.uuid_operacion,
+      resultado.motivo ?? 'El servidor volvió a rechazar el pedido',
+      detalle
+    );
+    await this.persistirAceptacion(local.uuid_orden ?? null, operacion.uuid_operacion, detalle);
+    throw new Error(resultado.motivo ?? 'El servidor volvió a rechazar el pedido.');
+  }
+
+  /** RN-007: el usuario no acepta el nuevo total; se cancela el pedido local. */
+  async rechazarNuevoTotal(uuidPago: string): Promise<PagoLocal> {
+    await this.audit.registrar({
+      tipo: 'PAGO',
+      mensaje: 'Nuevo total rechazado por el usuario; pedido cancelado.',
+      detalle: { uuid_pago: uuidPago }
+    });
+    return this.cancelar(uuidPago);
+  }
+
+  /** Persiste en la orden local la solicitud de aceptación recibida del sync. */
+  async registrarAceptacionRequerida(
+    uuidOperacion: string,
+    detalle: Record<string, unknown>
+  ): Promise<void> {
+    const operacion = await this.queue.obtener(uuidOperacion);
+    const uuidOrden = typeof operacion?.payload['uuid_orden'] === 'string'
+      ? operacion.payload['uuid_orden'] as string
+      : null;
+    await this.persistirAceptacion(uuidOrden, uuidOperacion, detalle);
   }
 
   async listarPendientes(filtros: FiltrosPagosDiferidos = {}): Promise<Array<PagoLocal | PagoDiferido>> {
@@ -427,8 +498,9 @@ export class PendingPaymentService {
       uuid_orden: orden?.uuid_orden,
       uuid_carrito: orden?.uuid_carrito,
       monto: local.monto,
-      moneda: local.moneda,
-      acepta_nuevo_total: true
+      moneda: local.moneda
+      // RN-007: la aceptación del total recalculado es explícita; se envía
+      // solo cuando el usuario la confirma (aceptarNuevoTotal).
     };
 
     const remoto = await this.primero(this.paymentsApi.crearPago(datos));
@@ -533,6 +605,41 @@ export class PendingPaymentService {
     const sanitizado: PagoLocal = { ...pago, client_secret: undefined };
     await this.indexedDb.guardar('pagos', sanitizado);
     return sanitizado;
+  }
+
+  private async persistirAceptacion(
+    uuidOrden: string | null,
+    uuidOperacion: string,
+    detalle: Record<string, unknown>
+  ): Promise<void> {
+    if (!uuidOrden) return;
+    const orden = await this.indexedDb.obtener<OrdenLocal>('ordenes_locales', uuidOrden);
+    if (!orden) return;
+    await this.indexedDb.guardar('ordenes_locales', {
+      ...orden,
+      requiere_aceptacion: detalle['requiere_aceptacion'] === true,
+      total_anterior: detalle['total_anterior'] != null ? Number(detalle['total_anterior']) : orden.total_local,
+      total_nuevo: detalle['total_nuevo'] != null ? Number(detalle['total_nuevo']) : orden.total_local,
+      diferencias: Array.isArray(detalle['diferencias'])
+        ? detalle['diferencias'] as OrdenLocal['diferencias']
+        : null,
+      uuid_operacion: uuidOperacion,
+      error_detalle: typeof detalle['motivo'] === 'string' ? detalle['motivo'] : orden.error_detalle,
+      updated_at: new Date().toISOString()
+    } satisfies OrdenLocal);
+  }
+
+  private async limpiarAceptacion(uuidOrden: string | null): Promise<void> {
+    if (!uuidOrden) return;
+    const orden = await this.indexedDb.obtener<OrdenLocal>('ordenes_locales', uuidOrden);
+    if (!orden) return;
+    await this.indexedDb.guardar('ordenes_locales', {
+      ...orden,
+      requiere_aceptacion: false,
+      diferencias: null,
+      error_detalle: null,
+      updated_at: new Date().toISOString()
+    } satisfies OrdenLocal);
   }
 
   private async marcarOrdenConfirmada(uuidOrden: string | null): Promise<void> {

@@ -8,6 +8,7 @@ import { OfflineAuditService } from './offline-audit.service';
 import { OfflineQueueService } from './offline-queue.service';
 import { OfflineSessionService } from './offline-session.service';
 import { SyncEngineService } from './sync-engine.service';
+import { PendingPaymentService } from './pending-payment.service';
 import { OfflineApiService } from '../services/offline-api.service';
 import { StockWebSocketService } from '../services/stock-websocket.service';
 import { StorageService } from '../services/storage.service';
@@ -79,7 +80,8 @@ describe('CU08 - Sincronización y resumen de la cola', () => {
         { provide: OfflineApiService, useValue: api },
         { provide: ConflictService, useValue: conflictos },
         { provide: StockWebSocketService, useValue: websocket },
-        { provide: OfflineSessionService, useValue: { tokenOffline: () => 'token-offline' } }
+        { provide: OfflineSessionService, useValue: { tokenOffline: () => 'token-offline' } },
+        { provide: PendingPaymentService, useValue: { registrarAceptacionRequerida: async () => undefined } }
       ]
     });
 

@@ -23,7 +23,8 @@ import { ExpiryCountdownComponent } from '../../../../shared/components/expiry-c
         <p>
           Orden <strong>{{ resultado.orden.uuid_orden | slice:0:12 }}…</strong> en estado
           <span class="badge badge-pending">PENDIENTE_PAGO_DIFERIDO</span>.
-          El pago se completará cuando recuperes la conexión.
+          El pago se completará cuando recuperes la conexión. Si el servidor
+          actualizó los precios, deberás aceptar el nuevo total antes de pagar.
         </p>
         <app-expiry-countdown
           [fechaExpiracion]="resultado.orden.expira_en ?? null"
@@ -120,7 +121,6 @@ export class CartOfflinePanelComponent {
     try {
       const user = this.auth.currentUserSignal();
       const conversion = await this.cartService.confirmarCompraOffline({
-        aceptaNuevoTotal: true,
         // Offline no se conoce el id del perfil de cliente; el backend lo
         // resuelve desde el usuario de la operación (evita FK cliente_id).
         clienteId: null,

@@ -12,6 +12,7 @@ import {
   LogConflicto,
   OperacionLoteItem,
   OperacionOfflineRemota,
+  ResultadoOperacion,
   ResumenSincronizacion,
   StockOffline,
   VersionPaquete
@@ -126,10 +127,13 @@ export class OfflineApiService {
     return this.http.get<OperacionOfflineRemota>(`${this.API_URL}/operaciones/${uuidOperacion}`);
   }
 
-  reintentarOperacion(uuidOperacion: string): Observable<OperacionOfflineRemota> {
-    return this.http.post<OperacionOfflineRemota>(
+  reintentarOperacion(
+    uuidOperacion: string,
+    datos?: { acepta_nuevo_total?: boolean }
+  ): Observable<ResultadoOperacion> {
+    return this.http.post<ResultadoOperacion>(
       `${this.API_URL}/operaciones/${uuidOperacion}/reintentar`,
-      {}
+      datos ?? {}
     );
   }
 

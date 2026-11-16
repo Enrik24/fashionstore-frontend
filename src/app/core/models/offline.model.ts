@@ -352,6 +352,17 @@ export interface OrdenLocal {
   created_at: string;
   updated_at: string;
   error_detalle?: string | null;
+  /** [EXAMEN-2] RN-007: el servidor recalculó el total y exige aceptación. */
+  requiere_aceptacion?: boolean;
+  total_anterior?: number | null;
+  total_nuevo?: number | null;
+  diferencias?: Array<{
+    variante_producto_id?: number;
+    precio_local?: number;
+    precio_central?: number;
+    diferencia?: number;
+  }> | null;
+  uuid_operacion?: string | null;
 }
 
 export interface PagoLocal {

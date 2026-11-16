@@ -27,6 +27,7 @@ export interface PagoDiferido {
   moneda: string;
   estado: EstadoPagoDiferido;
   stripe_payment_intent_id?: string | null;
+  stripe_checkout_session_id?: string | null;
   client_secret?: string | null;
   requiere_accion: boolean;
   idempotency_key?: string | null;
