@@ -90,7 +90,7 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
         // 502 durante un reinicio: el navegador no puede leer la respuesta
         // (no trae cabeceras CORS) y la reporta como error de CORS.
         toast.warning('Sin conexión con el servidor. Si el modo offline está habilitado, puedes seguir operando.', 'Sin conexión');
-      } else if (error.status === 401 && !isAuthEndpoint) {
+      } else if (error.status === 401 && !isAuthEndpoint && !req.url.includes('/offline/sesion/')) {
         toast.warning('Tu sesión ha expirado. Por favor inicia sesión nuevamente.', 'Sesión Expirada');
         storage.clearAuth();
         router.navigate(['/auth/login']);

@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { PendingPaymentService, PreparacionPago } from '../../../../core/offline/pending-payment.service';
@@ -165,7 +165,7 @@ import { ExpiryCountdownComponent } from '../../../../shared/components/expiry-c
                     <i class="ri-shield-keyhole-line"></i>
                     <div>
                       <strong>Requiere acción del cliente</strong>
-                      <p>Tu banco solicita autenticación 3D Secure. Completa la verificación para continuar.</p>
+                      <p>Completa el Checkout seguro de Stripe para pagar. Tu banco puede solicitar autenticación adicional.</p>
                     </div>
                   </div>
                 }
@@ -295,7 +295,7 @@ import { ExpiryCountdownComponent } from '../../../../shared/components/expiry-c
     @media (max-width: 760px) { .pago-grid { grid-template-columns: 1fr; } }
   `]
 })
-export class PendingPaymentComponent implements OnInit {
+export class PendingPaymentComponent implements OnInit, OnDestroy {
   private route = inject(ActivatedRoute);
   private router = inject(Router);
   private pending = inject(PendingPaymentService);
@@ -313,9 +313,29 @@ export class PendingPaymentComponent implements OnInit {
   ordenLocal = signal<OrdenLocal | null>(null);
   expirado = signal(false);
 
+  private temporizador: ReturnType<typeof setTimeout> | null = null;
+  private quitarOnline: (() => void) | null = null;
+  private destruido = false;
+
   async ngOnInit(): Promise<void> {
     this.uuidPago.set(this.route.snapshot.paramMap.get('uuidPago'));
+    this.quitarOnline = this.connectivity.alRecuperarConexion(() => { void this.cargar(); });
     await this.cargar();
+  }
+
+  ngOnDestroy(): void {
+    this.destruido = true;
+    this.quitarOnline?.();
+    if (this.temporizador) clearTimeout(this.temporizador);
+  }
+
+  private programarActualizacion(): void {
+    if (this.temporizador) clearTimeout(this.temporizador);
+    if (this.destruido || ['CONFIRMADO', 'CANCELADO', 'EXPIRADO', 'REEMBOLSADO'].includes(this.estado())) return;
+    this.temporizador = setTimeout(() => {
+      if (this.enLinea() && !this.procesando()) void this.cargar(false);
+      else this.programarActualizacion();
+    }, 5000);
   }
 
   estado(): string {
@@ -374,7 +394,7 @@ export class PendingPaymentComponent implements OnInit {
     return `Orden #${pago.orden_id ?? 'local'}`;
   }
 
-  async cargar(): Promise<void> {
+  async cargar(mostrarCarga = true): Promise<void> {
     const uuid = this.uuidPago();
     if (!uuid) {
       this.error.set('No se indicó el identificador del pago.');
@@ -382,13 +402,13 @@ export class PendingPaymentComponent implements OnInit {
       return;
     }
 
-    this.cargando.set(true);
+    if (mostrarCarga) this.cargando.set(true);
     this.error.set(null);
     try {
       this.pago.set(await this.pending.estado(uuid));
       const orden = await this.pending.ordenDePago(uuid);
       this.ordenLocal.set(orden);
-      if (!orden?.requiere_aceptacion) {
+      if (this.enLinea() && !orden?.requiere_aceptacion && this.estado() !== 'CONFIRMADO') {
         const preparacion = await this.pending.crearOConfirmarPago(uuid);
         this.preparacion.set(preparacion);
         if (preparacion.pago) this.pago.set(preparacion.pago);
@@ -396,7 +416,8 @@ export class PendingPaymentComponent implements OnInit {
       this.expirado.set(this.estado() === 'EXPIRADO');
       // Retorno del Checkout de Stripe: verificar el cobro contra el backend
       // (el webhook firmado sigue siendo la fuente de verdad, RN-015).
-      if (this.route.snapshot.queryParamMap.get('retorno') === 'exito' && this.estado() !== 'CONFIRMADO') {
+      if (this.enLinea() && this.route.snapshot.queryParamMap.get('retorno') === 'exito'
+        && ['EN_PROCESO', 'REQUIERE_ACCION_CLIENTE'].includes(this.estado())) {
         try {
           this.pago.set(await this.pending.confirmarConStripe({ uuid_pago: uuid }));
         } catch {
@@ -407,6 +428,7 @@ export class PendingPaymentComponent implements OnInit {
       this.error.set(this.mensajeError(error));
     } finally {
       this.cargando.set(false);
+      this.programarActualizacion();
     }
   }
 
@@ -454,7 +476,7 @@ export class PendingPaymentComponent implements OnInit {
         this.toast.success('Pago confirmado correctamente.', 'Pago exitoso');
         await this.router.navigate(['/checkout/success'], { queryParams: { uuidPago: uuid } });
       } else if (actualizado.estado === 'REQUIERE_ACCION_CLIENTE') {
-        this.toast.warning('Tu banco requiere una autenticación adicional (3DS).', 'Acción requerida');
+        this.toast.warning('El pago aún está pendiente. Completa el Checkout de Stripe.', 'Acción requerida');
       } else {
         this.toast.warning('El pago aún no fue confirmado. Revisa el estado o reintenta.', 'Pago pendiente');
       }
@@ -472,6 +494,7 @@ export class PendingPaymentComponent implements OnInit {
     try {
       const actualizado = await this.pending.reintentar(uuid);
       this.pago.set(actualizado);
+      this.preparacion.set(await this.pending.crearOConfirmarPago(uuid));
       this.toast.info('Reintento registrado. Revisa el estado del pago.', 'Pago reintentado');
     } catch (error) {
       this.toast.error(this.mensajeError(error), 'No se pudo reintentar');

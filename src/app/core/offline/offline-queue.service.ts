@@ -120,11 +120,14 @@ export class OfflineQueueService {
   ): Promise<OperacionOfflineLocal[]> {
     const pendientes = await this.pendientes();
     const ahora = Date.now();
-    return pendientes
-      .filter((operacion) => incluirProgramadas
-        || !operacion.programado_para
-        || Date.parse(operacion.programado_para) <= ahora)
-      .slice(0, Math.max(1, Math.trunc(maximo)));
+    const lote: OperacionOfflineLocal[] = [];
+    for (const operacion of pendientes) {
+      if (!incluirProgramadas && operacion.programado_para
+        && Date.parse(operacion.programado_para) > ahora) break;
+      lote.push(operacion);
+      if (lote.length >= Math.max(1, Math.trunc(maximo))) break;
+    }
+    return lote;
   }
 
   /** Payload exacto que viaja al backend (`OperacionLoteItem`). */

@@ -190,9 +190,13 @@ export class PendingPaymentService {
 
   async cancelar(uuidPago: string): Promise<PagoLocal> {
     const local = await this.obtenerLocal(uuidPago);
-    const remoto = this.connectivity.enLinea()
-      ? await this.primero(this.paymentsApi.cancelarPago(uuidPago)).catch(() => null)
+    const operacion = local ? await this.operacionDeOrden(local) : null;
+    const registrado = !!local?.orden_id || !!operacion?.resultado_json?.['pago'];
+    if (registrado && !this.connectivity.enLinea()) throw new Error('Recupera la conexión para cancelar el pago en el servidor.');
+    const remoto = registrado
+      ? await this.primero(this.paymentsApi.cancelarPago(uuidPago))
       : null;
+    if (!registrado && operacion) await this.queue.marcarRechazada(operacion.uuid_operacion, 'Pedido cancelado por el cliente');
 
     const estado: EstadoPagoDiferido = this.normalizarEstado(remoto?.estado ?? 'CANCELADO');
     const pago: PagoLocal = {
@@ -295,7 +299,10 @@ export class PendingPaymentService {
       try {
         const remotos = await this.primero(this.paymentsApi.listarPagos(filtros));
         await this.cachearRemotos(remotos);
-        return remotos;
+        const uuids = new Set(remotos.map((pago) => pago.uuid_pago));
+        const locales = (await this.pagosLocales()).filter((pago) => !uuids.has(pago.uuid_pago)
+          && (filtros.estado ? pago.estado === filtros.estado : ESTADOS_PENDIENTES.includes(pago.estado)));
+        return [...remotos, ...locales];
       } catch {
         // Caché local.
       }
@@ -472,6 +479,12 @@ export class PendingPaymentService {
   // ----------------------------- internos -----------------------------
 
   private async enviarPago(local: PagoLocal): Promise<PreparacionPago> {
+    if (!this.connectivity.enLinea()) {
+      return { uuidPago: local.uuid_pago, pago: null, clientSecret: null,
+        requiereAccion: false, checkoutUrl: null, pendienteOrden: true,
+        mensaje: 'Pedido guardado. Recupera la conexión para validar y pagar.' };
+    }
+    this.activarEscuchaPagos();
     const orden = local.uuid_orden
       ? await this.indexedDb.obtener<OrdenLocal>('ordenes_locales', local.uuid_orden)
       : null;
@@ -503,7 +516,9 @@ export class PendingPaymentService {
       // solo cuando el usuario la confirma (aceptarNuevoTotal).
     };
 
-    const remoto = await this.primero(this.paymentsApi.crearPago(datos));
+    const remoto = local.orden_id || operacion?.resultado_json?.['pago']
+      ? await this.primero(this.paymentsApi.obtenerPago(local.uuid_pago))
+      : await this.primero(this.paymentsApi.crearPago(datos));
     await this.actualizarDesdeRemoto(remoto);
     return this.prepararDesdeRemoto(remoto);
   }
@@ -519,7 +534,7 @@ export class PendingPaymentService {
       checkoutUrl: remoto.checkout_url ?? null,
       pendienteOrden: false,
       mensaje: remoto.requiere_accion
-        ? 'El banco solicita autenticación adicional (3D Secure) para completar el pago.'
+        ? 'Completa el pago en el Checkout seguro de Stripe; puede solicitar autenticación bancaria.'
         : remoto.estado === 'CONFIRMADO'
           ? 'Pago confirmado.'
           : 'Pago creado; completa la confirmación con tarjeta.'
@@ -580,6 +595,7 @@ export class PendingPaymentService {
         tenant_id: existente?.tenant_id ?? tenantId,
         updated_at: new Date().toISOString()
       } satisfies PagoLocal);
+      if (remoto.estado === 'CONFIRMADO') await this.marcarOrdenConfirmada(existente?.uuid_orden ?? null);
     }
   }
 

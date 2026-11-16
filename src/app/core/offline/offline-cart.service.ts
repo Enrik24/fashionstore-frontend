@@ -26,6 +26,7 @@ import { StorageService } from '../services/storage.service';
 import { OfflineCatalogService } from './offline-catalog.service';
 import { OfflineQueueService } from './offline-queue.service';
 import { OfflineAuditService } from './offline-audit.service';
+import { OfflineSessionService } from './offline-session.service';
 import { hashPayload } from '../utils/payload-hash.util';
 
 export interface AdvertenciaCupon {
@@ -59,6 +60,7 @@ export class OfflineCartService {
   private catalog = inject(OfflineCatalogService);
   private queue = inject(OfflineQueueService);
   private audit = inject(OfflineAuditService);
+  private session = inject(OfflineSessionService);
 
   private readonly API_URL = `${environment.apiUrl}/carrito/offline`;
 
@@ -273,6 +275,7 @@ export class OfflineCartService {
       // cambiaron, el usuario deberá aceptar el nuevo total al reconectar.
       acepta_nuevo_total: opciones.aceptaNuevoTotal ?? false,
       direccion_envio: opciones.direccionEnvio,
+      cupon_codigo: carrito.cupon_codigo,
       items: carrito.items.map((item) => ({
         variante_producto_id: item.variante_producto_id,
         cantidad: item.cantidad,
@@ -298,6 +301,18 @@ export class OfflineCartService {
     });
 
     return { orden, pago, operacion };
+  }
+
+  async ultimaConversion(): Promise<ConversionLocal | null> {
+    const ordenes = await this.indexedDb.obtenerTodos<OrdenLocal>('ordenes_locales');
+    const orden = ordenes.filter((item) => item.tenant_id === this.tenantId()
+      && item.usuario_id === this.usuarioId() && item.estado === 'PENDIENTE_PAGO_DIFERIDO')
+      .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))[0];
+    if (!orden?.uuid_pago) return null;
+    const pago = await this.indexedDb.obtener<PagoLocal>('pagos', orden.uuid_pago);
+    const operaciones = await this.indexedDb.obtenerTodos<OperacionOfflineLocal>('operaciones');
+    const operacion = operaciones.find((item) => item.payload['uuid_orden'] === orden.uuid_orden);
+    return pago && operacion ? { orden, pago, operacion } : null;
   }
 
   async carritoPendiente(): Promise<boolean> {
@@ -391,6 +406,14 @@ export class OfflineCartService {
   // ----------------------------- internos -----------------------------
 
   private async carritoActual(): Promise<CarritoLocal> {
+    await this.session.esperarCarga();
+    if (!this.session.haySesionOffline() || !this.session.sesionActiva() || !this.session.tokenOffline()) {
+      throw new Error('Activa una sesión offline vigente con tu PIN antes de modificar el carrito. Puedes seguir consultando el catálogo.');
+    }
+    const configuracion = await this.catalog.configuracionLocal();
+    if (!configuracion?.habilitar_carrito_offline) {
+      throw new Error('El carrito offline no está habilitado. Actualiza la configuración con conexión.');
+    }
     const existente = this.carrito() ?? await this.cargarCarritoLocal();
     if (existente) return existente;
 

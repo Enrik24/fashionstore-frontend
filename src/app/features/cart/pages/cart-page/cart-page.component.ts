@@ -30,7 +30,7 @@ import { CartOfflinePanelComponent } from '../../components/cart-offline-panel/c
             <span>Cargando tu carrito...</span>
           </div>
         } @else if (!cartService.cartSignal() || cartService.cartSignal()?.items?.length === 0) {
-          @if (cartService.esOffline() && cartService.conversionOffline()) {
+          @if (cartService.conversionOffline()) {
             <!-- CU15: éxito de la compra offline aunque el carrito ya se vació -->
             <div class="summary-card card offline-success-card">
               <app-cart-offline-panel></app-cart-offline-panel>
@@ -75,9 +75,9 @@ import { CartOfflinePanelComponent } from '../../components/cart-offline-panel/c
                         />
                         <div class="item-info">
                           <h4 class="item-name">
-                            {{ item.variante_producto?.producto?.nombre || 'Prenda de Moda' }}
+                            {{ item.variante_producto?.producto?.nombre || item.nombre_producto || 'Producto' }}
                           </h4>
-                          <span class="item-sku">SKU: {{ item.variante_producto?.sku_variante }}</span>
+                          <span class="item-sku">SKU: {{ item.variante_producto?.sku_variante || item.sku_variante }}</span>
                           <div class="item-tags">
                             @if (item.variante_producto?.talla) {
                               <span class="badge badge-primary">Talla: {{ item.variante_producto?.talla?.valor || item.variante_producto?.talla?.nombre }}</span>
@@ -740,14 +740,17 @@ export class CartPageComponent implements OnInit {
     if (Array.isArray(imgs) && imgs.length > 0 && imgs[0]) {
       return imgs[0];
     }
-    return this.DEFAULT_PRODUCT_IMAGE;
+    return item.imagen || this.DEFAULT_PRODUCT_IMAGE;
   }
 
   handleImageError(event: Event): void {
     const target = event.target as HTMLImageElement;
-    if (target) {
-      target.src = this.DEFAULT_PRODUCT_IMAGE;
+    if (target.dataset['fallback']) {
+      target.style.visibility = 'hidden';
+      return;
     }
+    target.dataset['fallback'] = 'true';
+    target.src = this.DEFAULT_PRODUCT_IMAGE;
   }
 
   updateQuantity(item: ItemCarrito, newQty: number): void {

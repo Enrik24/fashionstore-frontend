@@ -3,6 +3,7 @@ import { HttpClientTestingModule } from '@angular/common/http/testing';
 import { DeviceService } from './device.service';
 import { IndexedDbService } from './indexed-db.service';
 import { OfflineAuditService } from './offline-audit.service';
+import { OfflineSessionService } from './offline-session.service';
 import { OfflineCartService } from './offline-cart.service';
 import { OfflineCatalogService } from './offline-catalog.service';
 import { OfflineQueueService } from './offline-queue.service';
@@ -94,7 +95,8 @@ describe('OfflineCartService - carrito local y conversión', () => {
 
   beforeEach(() => {
     memoria = crearMemoriaOffline();
-    catalogo = jasmine.createSpyObj<OfflineCatalogService>('OfflineCatalogService', ['stockLocal']);
+    catalogo = jasmine.createSpyObj<OfflineCatalogService>('OfflineCatalogService', ['stockLocal', 'configuracionLocal']);
+    catalogo.configuracionLocal.and.resolveTo({ habilitar_carrito_offline: true } as any);
     cola = jasmine.createSpyObj<OfflineQueueService>('OfflineQueueService', ['encolar']);
 
     catalogo.stockLocal.and.resolveTo(stock);
@@ -112,6 +114,10 @@ describe('OfflineCartService - carrito local y conversión', () => {
         { provide: DeviceService, useValue: crearDeviceFalso() },
         { provide: StorageService, useValue: crearStorageFalso() },
         { provide: OfflineCatalogService, useValue: catalogo },
+        { provide: OfflineSessionService, useValue: {
+          esperarCarga: async () => undefined, haySesionOffline: () => true,
+          sesionActiva: () => true, tokenOffline: () => 'test-token'
+        } },
         { provide: OfflineQueueService, useValue: cola },
         { provide: OfflineAuditService, useValue: auditoria.servicio }
       ]

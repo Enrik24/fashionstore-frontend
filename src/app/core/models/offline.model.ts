@@ -278,6 +278,8 @@ export interface PayloadOrdenPagoDiferido {
   sucursal_id?: number | null;
   cliente_id?: number | null;
   acepta_nuevo_total?: boolean;
+  total_aceptado?: number;
+  cupon_codigo?: string | null;
   direccion_envio?: string;
   items?: Array<{
     variante_producto_id: number;

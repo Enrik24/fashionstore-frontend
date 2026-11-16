@@ -80,7 +80,7 @@ export class SyncEngineService {
     void this.refrescarContadores();
 
     if (this.connectivity.enLinea()) {
-      void this.sincronizarAhora();
+      void this.sincronizarAhora().catch(() => undefined);
     }
   }
 
@@ -130,7 +130,7 @@ export class SyncEngineService {
         if (procesadas === 0) break;
       }
 
-      agregado.texto = `${agregado.confirmadas} confirmadas, ${agregado.duplicadas} duplicadas, `
+      agregado.texto = `${agregado.confirmadas} registradas en servidor (los pedidos requieren pago), ${agregado.duplicadas} duplicadas, `
         + `${agregado.rechazadas} rechazadas, ${agregado.conflictos} conflictos`;
       this.ultimoResultado.set(agregado);
       this.estado.set('IDLE');
@@ -143,6 +143,8 @@ export class SyncEngineService {
     } finally {
       this.sincronizando = false;
       this.progreso.set({ enviadas: 0, total: 0 });
+      const primera = (await this.queue.pendientes())[0];
+      this.programarTemporizadorReintento(primera?.programado_para ?? null);
     }
   }
 
@@ -166,6 +168,7 @@ export class SyncEngineService {
 
     this.progreso.set({ enviadas: 0, total: lote.length });
     for (const operacion of lote) {
+      await this.queue.registrarIntento(operacion.uuid_operacion);
       await this.queue.marcarEnviada(operacion.uuid_operacion);
     }
 
@@ -201,7 +204,7 @@ export class SyncEngineService {
     if (this.quitarListenerOnline) return;
     this.quitarListenerOnline = this.connectivity.alRecuperarConexion(() => {
       this.estado.set('IDLE');
-      void this.sincronizarAhora();
+      void this.sincronizarAhora().catch(() => undefined);
     });
   }
 
@@ -329,7 +332,6 @@ export class SyncEngineService {
       const operacion = porUuid.get(item.uuid_operacion);
       if (!operacion) continue;
 
-      await this.queue.registrarIntento(item.uuid_operacion);
       await this.aplicarResultado(item);
 
       enviadas += 1;
@@ -349,6 +351,7 @@ export class SyncEngineService {
     for (const operacion of lote) {
       if (!devueltos.has(operacion.uuid_operacion)) {
         await this.queue.marcarPendiente(operacion.uuid_operacion, 'El servidor no devolvió resultado para esta operación.');
+        await this.queue.programarReintento(operacion.uuid_operacion);
       }
     }
 
@@ -430,7 +433,7 @@ export class SyncEngineService {
     const alVolver = () => {
       if (document.visibilityState !== 'visible') return;
       if (!this.connectivity.enLinea()) return;
-      if (this.pendientes() > 0 || !this.iniciado) void this.sincronizarAhora();
+      if (this.pendientes() > 0 || !this.iniciado) void this.sincronizarAhora().catch(() => undefined);
     };
     document.addEventListener('visibilitychange', alVolver);
     this.quitarListenerVisibilidad = () => document.removeEventListener('visibilitychange', alVolver);
@@ -445,7 +448,7 @@ export class SyncEngineService {
     const espera = Math.max(0, Date.parse(proximo) - Date.now());
     this.temporizadorReintento = setTimeout(() => {
       this.temporizadorReintento = null;
-      if (this.connectivity.enLinea()) void this.sincronizarAhora();
+      if (this.connectivity.enLinea()) void this.sincronizarAhora().catch(() => undefined);
     }, espera);
   }
 

@@ -48,7 +48,10 @@ export interface VarianteResumen {
 }
 
 export interface ItemCarrito {
-  id: number;
+  id: number | string;
+  nombre_producto?: string | null;
+  sku_variante?: string | null;
+  imagen?: string | null;
   carrito_id: number;
   variante_producto_id: number;
   cantidad: number;

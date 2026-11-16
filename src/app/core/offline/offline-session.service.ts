@@ -1,4 +1,4 @@
-import { Injectable, computed, inject, signal } from '@angular/core';
+import { DestroyRef, Injectable, computed, inject, signal } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Observable, catchError, from, map, of, switchMap, throwError } from 'rxjs';
 import { environment } from '../../../environments/environment';
@@ -45,14 +45,24 @@ export class OfflineSessionService {
   private readonly cargaInicial: Promise<void>;
 
   /** Vigencia agotada: el usuario puede consultar pero no operar offline. */
-  public soloConsulta = computed<boolean>(() => {
-    const expira = this.expiraSignal();
-    if (!expira) return false;
-    return Date.parse(expira) <= Date.now();
-  });
+  private vencida = signal(true);
+  private temporizadorVencimiento: ReturnType<typeof setTimeout> | null = null;
+  public soloConsulta = computed(() => this.vencida() || !this.sesionActiva());
 
   constructor() {
     this.cargaInicial = this.cargarSesionLocal();
+    inject(DestroyRef).onDestroy(() => {
+      if (this.temporizadorVencimiento) clearTimeout(this.temporizadorVencimiento);
+    });
+  }
+
+  private programarVencimiento(expira: string): void {
+    if (this.temporizadorVencimiento) clearTimeout(this.temporizadorVencimiento);
+    const restante = Date.parse(expira) - Date.now();
+    this.vencida.set(!(restante > 0));
+    this.temporizadorVencimiento = restante > 0
+      ? setTimeout(() => this.vencida.set(true), restante)
+      : null;
   }
 
   /**
@@ -126,7 +136,9 @@ export class OfflineSessionService {
 
   haySesionOffline(): boolean {
     const local = this.sesionLocal();
-    if (!local || local.bloqueado) return false;
+    if (!local || local.bloqueado || !local.token_offline_cifrado
+      || local.tenant_id !== this.storage.getTenantActivo<{ id: number }>()?.id
+      || local.usuario_id !== this.storage.getUser<{ id: number }>()?.id) return false;
     return Date.parse(local.expira_en) > Date.now();
   }
 
@@ -138,6 +150,7 @@ export class OfflineSessionService {
     return from(this.obtenerSesionLocal()).pipe(
       switchMap((local) => {
         if (!local) return throwError(() => new Error('No hay un PIN configurado. Inicia sesión con conexión para configurarlo.'));
+        if (this.connectivity.enLinea()) return this.solicitarTokenInicial(pin);
         if (local.bloqueado) return throwError(() => new Error('La sesión está bloqueada. Autentícate en línea para continuar.'));
         return from(this.crypto.verificarPin(pin, local.pin_hash, local.pin_salt)).pipe(
           switchMap((valido) => {
@@ -246,7 +259,8 @@ export class OfflineSessionService {
       tenant_id: tenant.id,
       usuario_id: usuario.id
     }).pipe(
-      switchMap((sesion) => from(this.guardarTokenLocal(sesion, pin)).pipe(
+      switchMap((sesion) => from(this.guardarPinLocal(pin)).pipe(
+        switchMap(() => from(this.guardarTokenLocal(sesion, pin))),
         map(() => sesion)
       ))
     );
@@ -254,12 +268,14 @@ export class OfflineSessionService {
 
   private abrirConTokenLocal(pin: string, local: SesionOfflineLocal): Promise<void> {
     return this.descifrarTokenLocal(pin, local).then((token) => {
+      this.tokenSignal.set(token);
+      this.expiraSignal.set(local.expira_en);
+      this.programarVencimiento(local.expira_en);
       if (!token) {
+        this.vencida.set(true);
         this.sesionActiva.set(true);
         return;
       }
-      this.tokenSignal.set(token);
-      this.expiraSignal.set(local.expira_en);
       this.sesionActiva.set(true);
       this.pinConfigurado.set(true);
       this.storage.setPinConfigurado(true);
@@ -291,6 +307,8 @@ export class OfflineSessionService {
       clave: 'sesion',
       pin_hash: hash,
       pin_salt: salt,
+      token_offline_cifrado: undefined,
+      expira_en: new Date(0).toISOString(),
       intentos_fallidos: 0,
       bloqueado: false
     };
@@ -311,11 +329,11 @@ export class OfflineSessionService {
     );
 
     let sobreJson = actual.token_offline_cifrado ?? null;
-    if (pin) {
-      const clave = this.claveCrypto ?? await this.crypto.derivarClave(pin, actual.pin_salt);
-      this.claveCrypto = clave;
-      sobreJson = JSON.stringify(await this.crypto.cifrar(sesion.token_offline, clave));
-    }
+    const clave = pin ? await this.crypto.derivarClave(pin, actual.pin_salt) : this.claveCrypto;
+    if (!clave) throw new Error('Desbloquea la sesión con tu PIN antes de renovarla.');
+    this.claveCrypto = clave;
+    sobreJson = JSON.stringify(await this.crypto.cifrar(sesion.token_offline, clave));
+    await this.indexedDb.guardar('meta', { clave: 'configuracion', valor: sesion.configuracion });
 
     const local: SesionOfflineLocal = {
       ...actual,
@@ -336,6 +354,7 @@ export class OfflineSessionService {
     this.sesionLocal.set(local);
     this.tokenSignal.set(sesion.token_offline);
     this.expiraSignal.set(sesion.expira_en);
+    this.programarVencimiento(sesion.expira_en);
     this.sesionActiva.set(true);
     this.pinConfigurado.set(true);
     this.storage.setPinConfigurado(true);
@@ -390,6 +409,7 @@ export class OfflineSessionService {
     this.pinConfigurado.set(true);
     this.storage.setPinConfigurado(true);
     this.expiraSignal.set(local.expira_en);
+    this.programarVencimiento(local.expira_en);
   }
 
   private async obtenerSesionLocal(): Promise<SesionOfflineLocal | null> {

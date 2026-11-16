@@ -110,6 +110,7 @@ export class CartService {
       return of(null);
     }
 
+    void this.offlineCart.ultimaConversion().then((conversion) => this.conversionOffline.set(conversion));
     this.loadingSignal.set(true);
     if (!this.connectivity.enLinea()) {
       return from(this.cargarCarritoOffline()).pipe(
@@ -360,8 +361,11 @@ export class CartService {
       fecha_creacion: local.updated_at,
       estado: local.estado === 'CONVERTIDO' ? 'CONVERTIDO' : 'ACTIVO',
       descuento_aplicado: local.descuento_local,
-      items: local.items.map((item, indice) => ({
-        id: indice + 1,
+      items: local.items.map((item) => ({
+        id: item.item_id,
+        nombre_producto: item.nombre_producto,
+        sku_variante: item.sku_variante,
+        imagen: item.imagen,
         carrito_id: 0,
         variante_producto_id: item.variante_producto_id,
         cantidad: item.cantidad,
@@ -384,7 +388,10 @@ export class CartService {
   private aItemCarrito(local: CarritoLocal): ItemCarrito {
     const item = local.items[local.items.length - 1];
     return {
-      id: local.items.length,
+      id: item?.item_id ?? '',
+      nombre_producto: item?.nombre_producto,
+      sku_variante: item?.sku_variante,
+      imagen: item?.imagen,
       carrito_id: 0,
       variante_producto_id: item?.variante_producto_id ?? 0,
       cantidad: item?.cantidad ?? 0,

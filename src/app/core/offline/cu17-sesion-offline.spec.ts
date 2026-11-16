@@ -243,6 +243,7 @@ describe('CU17 - Sesión offline con PIN', () => {
   });
 
   it('descuenta intentos con PIN incorrecto y bloquea al quinto intento', async () => {
+    connectivity.enLinea.and.returnValue(false);
     precargar(sesionLocal());
     const service = await crearServicio();
     pinEsperado = '999999';
@@ -262,6 +263,7 @@ describe('CU17 - Sesión offline con PIN', () => {
   });
 
   it('rechaza el ingreso cuando la sesión local está bloqueada', async () => {
+    connectivity.enLinea.and.returnValue(false);
     precargar(sesionLocal({ bloqueado: true }));
     const service = await crearServicio();
 
