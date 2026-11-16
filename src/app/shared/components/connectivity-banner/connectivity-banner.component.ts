@@ -72,7 +72,7 @@ export class ConnectivityBannerComponent implements OnInit, OnDestroy {
   public horasRestantes = computed<number | null>(() => {
     const local = this.offlineSession.sesionLocal();
     if (!local?.token_offline_cifrado || !local.expira_en) return null;
-    const restante = Date.parse(local.expira_en) - this.ahora();
+    const restante = Date.parse(local.expira_en) - Math.max(this.ahora(), Date.now());
     return restante > 0 ? Math.ceil(restante / 3_600_000) : 0;
   });
 

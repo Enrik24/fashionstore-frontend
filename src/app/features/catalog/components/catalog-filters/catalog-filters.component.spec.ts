@@ -3,13 +3,20 @@ import { HttpClientTestingModule } from '@angular/common/http/testing';
 import { CatalogFiltersComponent } from './catalog-filters.component';
 import { CatalogApiService } from '../../../../core/services/catalog-api.service';
 import { of } from 'rxjs';
+import { signal } from '@angular/core';
+import { ConnectivityService } from '../../../../core/offline/connectivity.service';
 
 describe('CatalogFiltersComponent', () => {
   let component: CatalogFiltersComponent;
   let fixture: ComponentFixture<CatalogFiltersComponent>;
   let mockCatalogApi: jasmine.SpyObj<CatalogApiService>;
+  let online: ReturnType<typeof signal<boolean>>;
+  let reconectar: () => void;
+  let quitar: jasmine.Spy;
 
   beforeEach(async () => {
+    online = signal(true);
+    quitar = jasmine.createSpy('quitarListener');
     mockCatalogApi = jasmine.createSpyObj('CatalogApiService', [
       'getCategories', 'getSeasons', 'getSizes', 'getColors', 'getCollections', 'listarTiposTela'
     ]);
@@ -23,7 +30,11 @@ describe('CatalogFiltersComponent', () => {
     await TestBed.configureTestingModule({
       imports: [CatalogFiltersComponent, HttpClientTestingModule],
       providers: [
-        { provide: CatalogApiService, useValue: mockCatalogApi }
+        { provide: CatalogApiService, useValue: mockCatalogApi },
+        { provide: ConnectivityService, useValue: {
+          enLinea: online,
+          alRecuperarConexion: (callback: () => void) => { reconectar = callback; return quitar; }
+        } }
       ]
     }).compileComponents();
 
@@ -37,6 +48,31 @@ describe('CatalogFiltersComponent', () => {
     expect(component.seasons.length).toBe(1);
     expect(component.sizes.length).toBe(1);
     expect(component.colors.length).toBe(1);
+  });
+
+  it('no hace consultas remotas sin conexión y las recupera al reconectar', () => {
+    fixture.destroy();
+    online.set(false);
+    for (const nombre of ['getCategories', 'getSeasons', 'getSizes', 'getColors', 'getCollections', 'listarTiposTela'] as const) {
+      mockCatalogApi[nombre].calls.reset();
+    }
+    fixture = TestBed.createComponent(CatalogFiltersComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+    expect(component.categories).toEqual([]);
+    for (const nombre of ['getCategories', 'getSeasons', 'getSizes', 'getColors', 'getCollections', 'listarTiposTela'] as const) {
+      expect(mockCatalogApi[nombre]).not.toHaveBeenCalled();
+    }
+    online.set(true);
+    reconectar();
+    expect(component.categories.length).toBe(1);
+    expect(component.sizes.length).toBe(1);
+    expect(mockCatalogApi.listarTiposTela).toHaveBeenCalledTimes(1);
+  });
+
+  it('retira el listener de conexión al destruir la pantalla', () => {
+    fixture.destroy();
+    expect(quitar).toHaveBeenCalledTimes(1);
   });
 
   it('debe emitir evento filtersChange al seleccionar talla o color', () => {

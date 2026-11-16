@@ -2,6 +2,7 @@ import { Injectable, inject, signal } from "@angular/core";
 import { HttpClient } from "@angular/common/http";
 import { environment } from "../../../environments/environment";
 import { PromocionPublica } from "../models/promotion.model";
+import { ConnectivityService } from "../offline/connectivity.service";
 
 /**
  * Servicio singleton que carga las promociones publicas activas una sola vez
@@ -10,17 +11,25 @@ import { PromocionPublica } from "../models/promotion.model";
 @Injectable({ providedIn: "root" })
 export class ActivePromotionsService {
   private http = inject(HttpClient);
+  private connectivity = inject(ConnectivityService);
   private readonly URL = `${environment.apiUrl}/public/promociones/activas`;
 
   private readonly _promociones = signal<PromocionPublica[]>([]);
   private loaded = false;
 
+  constructor() {
+    this.connectivity.alRecuperarConexion(() => this.load());
+  }
+
   load(): void {
-    if (this.loaded) return;
+    if (this.loaded || !this.connectivity.enLinea()) return;
     this.loaded = true;
     this.http.get<PromocionPublica[]>(this.URL).subscribe({
       next: (data) => this._promociones.set(data),
-      error: () => this._promociones.set([])
+      error: () => {
+        this.loaded = false;
+        this._promociones.set([]);
+      }
     });
   }
 

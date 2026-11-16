@@ -1,6 +1,6 @@
 import { Injectable, inject, signal, computed, effect } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable, forkJoin, from, map, of, switchMap, tap, catchError } from 'rxjs';
+import { Observable, forkJoin, from, map, of, switchMap, tap, catchError, finalize } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import {
   Carrito,
@@ -25,6 +25,7 @@ export class CartService {
   private connectivity = inject(ConnectivityService);
   private offlineCart = inject(OfflineCartService);
   private readonly API_URL = `${environment.apiUrl}/carrito`;
+  private cargaActual = 0;
 
   // Reactive state using signals
   public cartSignal = signal<Carrito | null>(null);
@@ -88,7 +89,7 @@ export class CartService {
         this.loadCart().subscribe();
       } else {
         // User logged out or staff role without client profile (Admin, Encargado, Cajero) - clear cart
-        this.cartSignal.set(null);
+        this.clearCartState();
       }
     }, { allowSignalWrites: true });
 
@@ -101,42 +102,30 @@ export class CartService {
   }
 
   clearCartState(): void {
+    this.cargaActual++;
     this.cartSignal.set(null);
+    this.conversionOffline.set(null);
+    this.loadingSignal.set(false);
   }
 
   loadCart(): Observable<Carrito | null> {
     if (!this.authService.isClient()) {
-      this.cartSignal.set(null);
+      this.clearCartState();
       return of(null);
     }
 
-    void this.offlineCart.ultimaConversion().then((conversion) => this.conversionOffline.set(conversion));
+    const carga = ++this.cargaActual;
     this.loadingSignal.set(true);
-    if (!this.connectivity.enLinea()) {
-      return from(this.cargarCarritoOffline()).pipe(
-        tap((cart) => {
-          this.cartSignal.set(cart);
-          this.estadoSincronizacion.set(cart?.estado_sincronizacion ?? 'OFFLINE');
-          this.loadingSignal.set(false);
-        })
-      );
-    }
+    const carrito = this.connectivity.enLinea()
+      ? this.http.get<Carrito>(`${this.API_URL}/`).pipe(
+          catchError(() => from(this.cargarCarritoOffline()).pipe(catchError(() => of(null))))
+        )
+      : from(this.cargarCarritoOffline());
 
-    return this.http.get<Carrito>(`${this.API_URL}/`).pipe(
-      tap((cart) => {
-        this.cartSignal.set(cart);
-        this.estadoSincronizacion.set('ONLINE');
-        this.loadingSignal.set(false);
-      }),
-      catchError((err) => {
-        this.loadingSignal.set(false);
-        // Si el backend falla pero hay carrito local, se ofrece continuar offline.
-        return from(this.cargarCarritoOffline()).pipe(
-          catchError(() => {
-            this.cartSignal.set(null);
-            return of(null);
-          })
-        );
+    return carrito.pipe(
+      switchMap((cart) => from(this.actualizarCarrito(cart, carga))),
+      finalize(() => {
+        if (carga === this.cargaActual) this.loadingSignal.set(false);
       })
     );
   }
@@ -145,6 +134,7 @@ export class CartService {
     this.loadingSignal.set(true);
 
     if (!this.connectivity.enLinea()) {
+      this.cargaActual++;
       this.conversionOffline.set(null);
       return from(this.offlineCart.agregarItem(varianteProductoId, cantidad)).pipe(
         map((carrito) => this.aItemCarrito(carrito)),
@@ -335,10 +325,12 @@ export class CartService {
     clienteId?: number | null;
     sucursalId?: number | null;
   } = {}): Promise<ConversionLocal> {
+    this.cargaActual++;
     return this.offlineCart.convertirAOrden(opciones).then((conversion) => {
       this.estadoSincronizacion.set(conversion.operacion.estado_sincronizacion);
       this.conversionOffline.set(conversion);
       this.cartSignal.set(null);
+      this.loadingSignal.set(false);
       return conversion;
     });
   }
@@ -347,6 +339,16 @@ export class CartService {
     const estado = await this.offlineCart.estadoSincronizacion();
     this.estadoSincronizacion.set(estado.estado);
     return estado.estado;
+  }
+
+  private async actualizarCarrito(cart: Carrito | null, carga: number): Promise<Carrito | null> {
+    const conversion = cart?.items.length ? null : await this.offlineCart.ultimaConversion();
+    if (carga === this.cargaActual) {
+      this.cartSignal.set(cart);
+      this.conversionOffline.set(conversion);
+      this.estadoSincronizacion.set(cart?.es_offline ? cart.estado_sincronizacion ?? 'OFFLINE' : 'ONLINE');
+    }
+    return cart;
   }
 
   private async cargarCarritoOffline(): Promise<Carrito | null> {

@@ -66,8 +66,8 @@ export class AuthService {
   public userSucursalNombre = computed(() => this.currentUserSignal()?.sucursal_nombre ?? null);
 
   constructor() {
-    // If token exists, load fresh profile
-    if (this.storage.getAccessToken()) {
+    const actualizarPerfil = () => {
+      if (!this.storage.getAccessToken() || !this.connectivity.enLinea()) return;
       this.getProfile().subscribe({
         error: (err) => {
           // [EXAMEN-2] Sin red (status 0) o error del servidor: no cerrar la
@@ -83,7 +83,9 @@ export class AuthService {
           this.superAdminSignal.set(false);
         }
       });
-    }
+    };
+    this.connectivity.alRecuperarConexion(actualizarPerfil);
+    actualizarPerfil();
   }
 
   login(credentials: LoginCredentials): Observable<TokenResponse> {

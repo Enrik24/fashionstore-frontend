@@ -1,10 +1,11 @@
-import { Component, Input, Output, EventEmitter, OnInit, inject } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Categoria, Temporada, Talla, Color, GeneroProducto, Coleccion } from '../../../../core/models/catalog.model';
 import { CatalogApiService } from '../../../../core/services/catalog-api.service';
 import { ProductoFilterParams } from '../../../../core/models/public-catalog.model';
 import { TipoTela } from '../../../../core/models/tipo-tela.model';
+import { ConnectivityService } from '../../../../core/offline/connectivity.service';
 
 @Component({
   selector: 'app-catalog-filters',
@@ -430,8 +431,10 @@ import { TipoTela } from '../../../../core/models/tipo-tela.model';
     }
   `]
 })
-export class CatalogFiltersComponent implements OnInit {
+export class CatalogFiltersComponent implements OnInit, OnDestroy {
   private catalogApi = inject(CatalogApiService);
+  private connectivity = inject(ConnectivityService);
+  private quitarListenerConexion: (() => void) | null = null;
 
   @Input() filters: ProductoFilterParams = {
     orden_por: 'recientes'
@@ -448,7 +451,16 @@ export class CatalogFiltersComponent implements OnInit {
   public telas: TipoTela[] = [];
 
   ngOnInit(): void {
-    // [EXAMEN-2] Sin conexión estas listas quedan vacías; el catálogo local aún funciona.
+    this.quitarListenerConexion = this.connectivity.alRecuperarConexion(() => this.cargarFiltros());
+    this.cargarFiltros();
+  }
+
+  ngOnDestroy(): void {
+    this.quitarListenerConexion?.();
+  }
+
+  private cargarFiltros(): void {
+    if (!this.connectivity.enLinea()) return;
     this.catalogApi.getCategories().subscribe({ next: cats => this.categories = cats, error: () => this.categories = [] });
     this.catalogApi.getSeasons().subscribe({ next: seasons => this.seasons = seasons, error: () => this.seasons = [] });
     this.catalogApi.getSizes().subscribe({ next: sizes => this.sizes = sizes, error: () => this.sizes = [] });

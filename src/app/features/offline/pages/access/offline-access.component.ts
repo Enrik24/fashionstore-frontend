@@ -194,7 +194,7 @@ export class OfflineAccessComponent implements OnInit {
   private returnUrl = this.route.snapshot.queryParamMap.get('returnUrl') ?? '';
 
   public estado = signal<EstadoSesionOffline | null>(null);
-  public exito = signal<SesionOffline | null>(null);
+  public exito = signal<Pick<SesionOffline, 'expira_en' | 'roles'> | null>(null);
   public validando = signal(false);
   public error = signal<string | null>(null);
   public bloqueado = signal(false);
@@ -229,7 +229,9 @@ export class OfflineAccessComponent implements OnInit {
         // Sin red: el servicio devuelve null pero deja sesionActiva=true
         // cuando el PIN local es correcto (token cifrado guardado).
         // El contrato documentado es: null + haySesionOffline() = éxito local.
-        if (this.offlineSession.haySesionOffline()) {
+        if (this.offlineSession.haySesionOffline() && this.offlineSession.sesionActiva()) {
+          const local = this.offlineSession.sesionLocal()!;
+          this.exito.set({ expira_en: local.expira_en, roles: local.roles });
           this.toast.success('Sesión offline iniciada.');
           this.irAResultado();
           return;
@@ -298,6 +300,7 @@ export class OfflineAccessComponent implements OnInit {
   }
 
   private mensajeError(err: any): string {
+    if (err instanceof Error) return err.message;
     const detalle = err?.error?.detail ?? err?.error?.message;
     if (typeof detalle === 'string') return detalle;
     if (err?.status === 423) return 'PIN bloqueado temporalmente por demasiados intentos.';

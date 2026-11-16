@@ -520,6 +520,7 @@ export class CatalogListComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     // [EXAMEN-2] Al recuperar la red, volver al catálogo en línea si estábamos offline.
     this.quitarListenerConexion = this.connectivity.alRecuperarConexion(() => {
+      if (this.filters.coleccion_id) this.resolverNombreColeccion(this.filters.coleccion_id);
       if (this.modoOffline()) this.loadCatalog();
     });
 
@@ -548,6 +549,10 @@ export class CatalogListComponent implements OnInit, OnDestroy {
   public nombreColeccion: string | null = null;
 
   private resolverNombreColeccion(id: number): void {
+    if (!this.connectivity.enLinea()) {
+      this.nombreColeccion = `Colección #${id}`;
+      return;
+    }
     this.catalogApiService.getCollections().subscribe({
       next: (cols) => {
         this.nombreColeccion = (cols || []).find(c => c.id === id)?.nombre || `Colección #${id}`;

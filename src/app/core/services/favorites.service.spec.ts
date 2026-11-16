@@ -6,6 +6,8 @@ import { ToastService } from './toast.service';
 import { AuthService } from './auth.service';
 import { Router } from '@angular/router';
 import { environment } from '../../../environments/environment';
+import { signal } from '@angular/core';
+import { ConnectivityService } from '../offline/connectivity.service';
 
 describe('FavoritesService (CU25 - Favoritos)', () => {
   let service: FavoritesService;
@@ -14,8 +16,10 @@ describe('FavoritesService (CU25 - Favoritos)', () => {
   let authMock: jasmine.SpyObj<AuthService>;
   let routerMock: jasmine.SpyObj<Router>;
   const API_URL = `${environment.apiUrl}/favoritos`;
+  let online: ReturnType<typeof signal<boolean>>;
 
   beforeEach(() => {
+    online = signal(true);
     toastMock = jasmine.createSpyObj('ToastService', ['success', 'error', 'info', 'warning']);
     authMock = jasmine.createSpyObj('AuthService', ['isAuthenticated', 'isClient']);
     authMock.isAuthenticated.and.returnValue(false);
@@ -29,7 +33,8 @@ describe('FavoritesService (CU25 - Favoritos)', () => {
         FavoritesService,
         { provide: ToastService, useValue: toastMock },
         { provide: AuthService, useValue: authMock },
-        { provide: Router, useValue: routerMock }
+        { provide: Router, useValue: routerMock },
+        { provide: ConnectivityService, useValue: { enLinea: online } }
       ]
     });
 
@@ -45,6 +50,26 @@ describe('FavoritesService (CU25 - Favoritos)', () => {
   it('debe crearse con la lista de favoritos vacía', () => {
     expect(service).toBeTruthy();
     expect(service.favoriteIdsSignal().size).toBe(0);
+  });
+
+  it('no carga IDs ni procesa acciones pendientes sin red y recupera la carga al reconectar', () => {
+    authMock.isClient.and.returnValue(true);
+    authMock.isAuthenticated.and.returnValue(true);
+    online.set(false);
+    service.favoriteIdsSignal.set(new Set([7]));
+    service.loadIds().subscribe(ids => expect(ids).toEqual([7]));
+    localStorage.setItem('fashionstore_pending_favorite', '42');
+    TestBed.flushEffects();
+    httpMock.expectNone(() => true);
+    expect(localStorage.getItem('fashionstore_pending_favorite')).toBe('42');
+    online.set(true);
+    TestBed.flushEffects();
+    httpMock.expectOne(`${API_URL}/ids`).flush({ producto_ids: [7, 9] });
+    const accionPendiente = httpMock.expectOne(`${API_URL}/42`);
+    expect(accionPendiente.request.method).toBe('POST');
+    accionPendiente.flush({ mensaje: 'Producto agregado a favoritos', producto_id: 42, favorito_id: 1 });
+    expect(service.isFavorite(9)).toBeTrue();
+    expect(localStorage.getItem('fashionstore_pending_favorite')).toBeNull();
   });
 
   it('debe redirigir a login y registrar la acción pendiente si el usuario no está autenticado', () => {

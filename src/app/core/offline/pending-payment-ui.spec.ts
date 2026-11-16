@@ -236,6 +236,19 @@ describe('Banner - sesión protegida y sesión vencida', () => {
     fixture.destroy();
   });
 
+  it('muestra doce horas inmediatamente al renovar entre actualizaciones del reloj', fakeAsync(() => {
+    sesion.sesionActiva.set(true);
+    sesion.sesionLocal.set({ token_offline_cifrado: 'cifrado', expira_en: new Date(Date.now() + 3600000).toISOString() });
+    const fixture = TestBed.createComponent(ConnectivityBannerComponent);
+    fixture.detectChanges();
+    tick(30000);
+    sesion.sesionLocal.set({ token_offline_cifrado: 'renovado', expira_en: new Date(Date.now() + 12 * 3600000).toISOString() });
+    fixture.detectChanges();
+    expect(fixture.componentInstance.horasRestantes()).toBe(12);
+    expect(fixture.nativeElement.textContent).toContain('12 h de sesión offline');
+    fixture.destroy();
+  }));
+
   it('anuncia solo consulta si está vencida aunque se haya ingresado el PIN sin red', () => {
     sesion.sesionLocal.set({ token_offline_cifrado: 'cifrado', expira_en: new Date(Date.now() - 1000).toISOString() });
     sesion.sesionVencida.set(true);

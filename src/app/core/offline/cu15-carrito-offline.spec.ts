@@ -21,6 +21,8 @@ import {
   crearDeviceFalso,
   crearMemoriaOffline,
   crearOperacionFalsa,
+  crearOrdenFalsa,
+  crearPagoFalso,
   crearStorageFalso,
   MemoriaOffline
 } from './testing/offline-test-doubles';
@@ -216,6 +218,30 @@ describe('OfflineCartService - carrito local y conversión', () => {
     expect(memoria.obtener('pagos', conversion.pago.uuid_pago)).not.toBeNull();
     expect(servicio.carrito()).toBeNull();
   });
+
+  it('restaura el pedido convertido sin crear otra orden ni operación', async () => {
+    memoria.sembrar('ordenes_locales', crearOrdenFalsa());
+    memoria.sembrar('pagos', crearPagoFalso());
+    memoria.sembrar('operaciones', crearOperacionFalsa({ payload: { uuid_orden: 'orden-1' } }));
+    memoria.sembrar('carrito', crearCarritoFalso({ estado: 'CONVERTIDO' }));
+
+    expect((await servicio.ultimaConversion())?.orden.uuid_orden).toBe('orden-1');
+    expect(cola.encolar).not.toHaveBeenCalled();
+  });
+
+  for (const conProductos of [true, false]) {
+    it(`no restaura un pedido antiguo con carrito activo ${conProductos ? 'con productos' : 'vacío'}`, async () => {
+      memoria.sembrar('ordenes_locales', crearOrdenFalsa());
+      memoria.sembrar('pagos', crearPagoFalso());
+      memoria.sembrar('operaciones', crearOperacionFalsa({ payload: { uuid_orden: 'orden-1' } }));
+      memoria.sembrar('carrito', crearCarritoFalso({ uuid_carrito: 'carrito-nuevo', items: conProductos ? [item()] : [] }));
+
+      expect(await servicio.ultimaConversion()).toBeNull();
+      expect(memoria.obtener('ordenes_locales', 'orden-1')).not.toBeNull();
+      expect(memoria.obtener('pagos', 'pago-1')).not.toBeNull();
+      expect(cola.encolar).not.toHaveBeenCalled();
+    });
+  }
 
   it('no convierte un carrito vacío', async () => {
     await expectAsync(servicio.convertirAOrden())

@@ -304,6 +304,7 @@ export class OfflineCartService {
   }
 
   async ultimaConversion(): Promise<ConversionLocal | null> {
+    if (await this.cargarCarritoLocal()) return null;
     const ordenes = await this.indexedDb.obtenerTodos<OrdenLocal>('ordenes_locales');
     const orden = ordenes.filter((item) => item.tenant_id === this.tenantId()
       && item.usuario_id === this.usuarioId() && item.estado === 'PENDIENTE_PAGO_DIFERIDO')

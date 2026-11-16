@@ -11,6 +11,7 @@ import {
 } from '../models/favorite.model';
 import { ToastService } from './toast.service';
 import { AuthService } from './auth.service';
+import { ConnectivityService } from '../offline/connectivity.service';
 
 const PENDING_FAVORITE_KEY = 'fashionstore_pending_favorite';
 
@@ -21,6 +22,7 @@ export class FavoritesService {
   private http = inject(HttpClient);
   private toast = inject(ToastService);
   private authService = inject(AuthService);
+  private connectivity = inject(ConnectivityService);
   private router = inject(Router);
   private readonly API_URL = `${environment.apiUrl}/favoritos`;
 
@@ -34,6 +36,7 @@ export class FavoritesService {
     effect(() => {
       const isClient = this.authService.isClient();
       if (isClient) {
+        if (!this.connectivity.enLinea()) return;
         this.loadIds().subscribe();
         this.procesarAccionPendiente();
       } else {
@@ -111,6 +114,7 @@ export class FavoritesService {
       this.favoriteIdsSignal.set(new Set());
       return of([]);
     }
+    if (!this.connectivity.enLinea()) return of([...this.favoriteIdsSignal()]);
 
     return this.http.get<FavoritoIdsResponse>(`${this.API_URL}/ids`).pipe(
       map((res) => res?.producto_ids || []),
