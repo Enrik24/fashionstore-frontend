@@ -48,8 +48,8 @@ import { ExpiryCountdownComponent } from '../../../../shared/components/expiry-c
           <div class="card aceptacion-card">
             <h2><i class="ri-price-tag-3-line"></i> El total de tu pedido cambió</h2>
             <p>
-              El servidor actualizó los precios desde que guardaste el pedido sin conexión.
-              El precio central prevalece (RN-007): acepta el nuevo total para continuar o
+              El servidor recalculó los precios y promociones desde que guardaste el pedido sin conexión.
+              El total central prevalece (RN-007): acepta el nuevo total para continuar o
               cancela el pedido sin ningún cobro.
             </p>
             <div class="totales-comparacion">
@@ -66,8 +66,14 @@ import { ExpiryCountdownComponent } from '../../../../shared/components/expiry-c
               <ul class="diferencias-lista">
                 @for (dif of ordenLocal()?.diferencias ?? []; track $index) {
                   <li>
-                    <span><i class="ri-shirt-line"></i> Variante #{{ dif.variante_producto_id }}</span>
-                    <span>{{ dif.precio_local | number:'1.2-2' }} → {{ dif.precio_central | number:'1.2-2' }}</span>
+                    @if (dif.tipo === 'TOTAL_RECALCULADO') {
+                      <span><i class="ri-price-tag-3-line"></i> Total recalculado con promociones</span>
+                      <span>Descuento: {{ moneda() }} {{ dif.descuento | number:'1.2-2' }} ·
+                        {{ moneda() }} {{ dif.total_local | number:'1.2-2' }} → {{ moneda() }} {{ dif.total_servidor | number:'1.2-2' }}</span>
+                    } @else {
+                      <span><i class="ri-shirt-line"></i> Variante #{{ dif.variante_producto_id }}</span>
+                      <span>{{ dif.precio_local | number:'1.2-2' }} → {{ dif.precio_central | number:'1.2-2' }}</span>
+                    }
                   </li>
                 }
               </ul>
@@ -316,6 +322,7 @@ export class PendingPaymentComponent implements OnInit, OnDestroy {
   private temporizador: ReturnType<typeof setTimeout> | null = null;
   private quitarOnline: (() => void) | null = null;
   private destruido = false;
+  private cargaEnCurso: Promise<void> | null = null;
 
   async ngOnInit(): Promise<void> {
     this.uuidPago.set(this.route.snapshot.paramMap.get('uuidPago'));
@@ -331,7 +338,8 @@ export class PendingPaymentComponent implements OnInit, OnDestroy {
 
   private programarActualizacion(): void {
     if (this.temporizador) clearTimeout(this.temporizador);
-    if (this.destruido || ['CONFIRMADO', 'CANCELADO', 'EXPIRADO', 'REEMBOLSADO'].includes(this.estado())) return;
+    if (this.destruido || this.error()
+      || ['CONFIRMADO', 'CANCELADO', 'EXPIRADO', 'REEMBOLSADO', 'RECHAZADO', 'ERROR_CRITICO'].includes(this.estado())) return;
     this.temporizador = setTimeout(() => {
       if (this.enLinea() && !this.procesando()) void this.cargar(false);
       else this.programarActualizacion();
@@ -394,7 +402,15 @@ export class PendingPaymentComponent implements OnInit, OnDestroy {
     return `Orden #${pago.orden_id ?? 'local'}`;
   }
 
-  async cargar(mostrarCarga = true): Promise<void> {
+  cargar(mostrarCarga = true): Promise<void> {
+    if (this.destruido || this.procesando()) return Promise.resolve();
+    if (this.cargaEnCurso) return this.cargaEnCurso;
+    if (this.temporizador) clearTimeout(this.temporizador);
+    this.cargaEnCurso = this.cargarPago(mostrarCarga).finally(() => { this.cargaEnCurso = null; });
+    return this.cargaEnCurso;
+  }
+
+  private async cargarPago(mostrarCarga: boolean): Promise<void> {
     const uuid = this.uuidPago();
     if (!uuid) {
       this.error.set('No se indicó el identificador del pago.');
@@ -405,29 +421,33 @@ export class PendingPaymentComponent implements OnInit, OnDestroy {
     if (mostrarCarga) this.cargando.set(true);
     this.error.set(null);
     try {
-      this.pago.set(await this.pending.estado(uuid));
+      const pago = await this.pending.estado(uuid, !mostrarCarga);
+      if (this.destruido || this.procesando()) return;
+      this.pago.set(pago);
       const orden = await this.pending.ordenDePago(uuid);
+      if (this.destruido || this.procesando()) return;
       this.ordenLocal.set(orden);
-      if (this.enLinea() && !orden?.requiere_aceptacion && this.estado() !== 'CONFIRMADO') {
-        const preparacion = await this.pending.crearOConfirmarPago(uuid);
-        this.preparacion.set(preparacion);
-        if (preparacion.pago) this.pago.set(preparacion.pago);
-      }
-      this.expirado.set(this.estado() === 'EXPIRADO');
-      // Retorno del Checkout de Stripe: verificar el cobro contra el backend
-      // (el webhook firmado sigue siendo la fuente de verdad, RN-015).
-      if (this.enLinea() && this.route.snapshot.queryParamMap.get('retorno') === 'exito'
-        && ['EN_PROCESO', 'REQUIERE_ACCION_CLIENTE'].includes(this.estado())) {
-        try {
-          this.pago.set(await this.pending.confirmarConStripe({ uuid_pago: uuid }));
-        } catch {
-          // El webhook puede confirmar después; se muestra el estado actual.
+      if (this.enLinea() && !orden?.requiere_aceptacion
+        && !['CONFIRMADO', 'CANCELADO', 'EXPIRADO', 'REEMBOLSADO', 'RECHAZADO', 'ERROR_CRITICO'].includes(this.estado())) {
+        if (pago && 'id' in pago) {
+          this.preparacion.set(this.pending.prepararDesdeRemoto(pago));
+        } else if (mostrarCarga && !pago?.orden_id) {
+          const preparacion = await this.pending.crearOConfirmarPago(uuid);
+          if (this.destruido || this.procesando()) return;
+          this.preparacion.set(preparacion);
+          if (preparacion.pago) this.pago.set(preparacion.pago);
         }
       }
+      this.expirado.set(this.estado() === 'EXPIRADO');
+      if (mostrarCarga && this.enLinea() && this.route.snapshot.queryParamMap.get('retorno') === 'exito'
+        && ['EN_PROCESO', 'REQUIERE_ACCION_CLIENTE'].includes(this.estado())) {
+        const actualizado = await this.pending.confirmarConStripe({ uuid_pago: uuid });
+        if (!this.destruido && !this.procesando()) this.pago.set(actualizado);
+      }
     } catch (error) {
-      this.error.set(this.mensajeError(error));
+      if (!this.destruido) this.error.set(this.mensajeError(error));
     } finally {
-      this.cargando.set(false);
+      if (!this.destruido) this.cargando.set(false);
       this.programarActualizacion();
     }
   }
@@ -436,6 +456,7 @@ export class PendingPaymentComponent implements OnInit, OnDestroy {
     const uuid = this.uuidPago();
     if (!uuid) return;
     this.procesando.set(true);
+    await this.cargaEnCurso;
     try {
       const preparacion = await this.pending.aceptarNuevoTotal(uuid);
       this.preparacion.set(preparacion);
@@ -447,6 +468,7 @@ export class PendingPaymentComponent implements OnInit, OnDestroy {
       this.ordenLocal.set(await this.pending.ordenDePago(uuid));
     } finally {
       this.procesando.set(false);
+      this.programarActualizacion();
     }
   }
 
@@ -454,6 +476,7 @@ export class PendingPaymentComponent implements OnInit, OnDestroy {
     const uuid = this.uuidPago();
     if (!uuid) return;
     this.procesando.set(true);
+    await this.cargaEnCurso;
     try {
       await this.pending.rechazarNuevoTotal(uuid);
       this.toast.info('Pedido cancelado. No se realizó ningún cobro.', 'Pedido cancelado');
@@ -462,6 +485,7 @@ export class PendingPaymentComponent implements OnInit, OnDestroy {
       this.toast.error(this.mensajeError(error), 'No se pudo cancelar el pedido');
     } finally {
       this.procesando.set(false);
+      this.programarActualizacion();
     }
   }
 
@@ -469,6 +493,7 @@ export class PendingPaymentComponent implements OnInit, OnDestroy {
     const uuid = this.uuidPago();
     if (!uuid) return;
     this.procesando.set(true);
+    await this.cargaEnCurso;
     try {
       const actualizado = await this.pending.confirmarConStripe({ uuid_pago: uuid });
       this.pago.set(actualizado);
@@ -484,6 +509,7 @@ export class PendingPaymentComponent implements OnInit, OnDestroy {
       this.toast.error(this.mensajeError(error), 'No se pudo confirmar el pago');
     } finally {
       this.procesando.set(false);
+      this.programarActualizacion();
     }
   }
 
@@ -491,6 +517,7 @@ export class PendingPaymentComponent implements OnInit, OnDestroy {
     const uuid = this.uuidPago();
     if (!uuid) return;
     this.procesando.set(true);
+    await this.cargaEnCurso;
     try {
       const actualizado = await this.pending.reintentar(uuid);
       this.pago.set(actualizado);
@@ -500,6 +527,7 @@ export class PendingPaymentComponent implements OnInit, OnDestroy {
       this.toast.error(this.mensajeError(error), 'No se pudo reintentar');
     } finally {
       this.procesando.set(false);
+      this.programarActualizacion();
     }
   }
 
@@ -507,6 +535,7 @@ export class PendingPaymentComponent implements OnInit, OnDestroy {
     const uuid = this.uuidPago();
     if (!uuid) return;
     this.procesando.set(true);
+    await this.cargaEnCurso;
     try {
       const actualizado = await this.pending.cancelar(uuid);
       this.pago.set(actualizado);
@@ -516,6 +545,7 @@ export class PendingPaymentComponent implements OnInit, OnDestroy {
       this.toast.error(this.mensajeError(error), 'No se pudo cancelar');
     } finally {
       this.procesando.set(false);
+      this.programarActualizacion();
     }
   }
 

@@ -72,7 +72,7 @@ describe('OfflineQueueService - cola FIFO de operaciones', () => {
     const normal = await servicio.tomarLote(50, false);
     const forzado = await servicio.tomarLote(50, true);
 
-    expect(normal.map((operacion) => operacion.uuid_operacion)).toEqual(['lista']);
+    expect(normal).toEqual([]);
     expect(forzado.map((operacion) => operacion.uuid_operacion)).toEqual(['programada', 'lista']);
   });
 

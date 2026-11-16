@@ -359,6 +359,10 @@ export interface OrdenLocal {
   total_anterior?: number | null;
   total_nuevo?: number | null;
   diferencias?: Array<{
+    tipo?: 'TOTAL_RECALCULADO';
+    total_local?: number;
+    total_servidor?: number;
+    descuento?: number;
     variante_producto_id?: number;
     precio_local?: number;
     precio_central?: number;

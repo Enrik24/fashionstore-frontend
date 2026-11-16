@@ -121,6 +121,11 @@ describe('CU08 - Sincronización y resumen de la cola', () => {
     const segunda = await cola.encolar('VENTA_CONTADO', { uuid_venta: 'v-1' });
     const tercera = await cola.encolar('ORDEN_PAGO_DIFERIDO', { uuid_carrito: 'c-1' });
 
+    const tomarLote = cola.tomarLote.bind(cola);
+    let llamada = 0;
+    spyOn(cola, 'tomarLote').and.callFake((maximo, incluirProgramadas) =>
+      tomarLote(++llamada === 1 ? 1 : maximo, incluirProgramadas)
+    );
     api.sincronizar.and.returnValues(
       of(lote([resultado(primera.uuid_operacion, 'CONFIRMADA')], 'lote-1')),
       of(lote([

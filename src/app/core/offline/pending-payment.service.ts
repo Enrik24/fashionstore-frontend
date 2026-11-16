@@ -1,4 +1,5 @@
 import { Injectable, inject, signal } from '@angular/core';
+import { HttpErrorResponse } from '@angular/common/http';
 import { environment } from '../../../environments/environment';
 import {
   OrdenLocal,
@@ -215,13 +216,20 @@ export class PendingPaymentService {
     return pago;
   }
 
-  async estado(uuidPago: string): Promise<PagoLocal | PagoDiferido | null> {
-    if (!this.connectivity.enLinea()) return this.obtenerLocal(uuidPago);
+  async estado(uuidPago: string, silencioso = false): Promise<PagoLocal | ResultadoPagoDiferido | null> {
+    const local = await this.obtenerLocal(uuidPago);
+    if (!this.connectivity.enLinea()) return local;
+    if (local && !local.pago_id && !local.orden_id) {
+      const operacion = await this.operacionDeOrden(local);
+      if (!operacion?.resultado_json?.['pago']) return local;
+    }
     try {
-      const remoto = await this.primero(this.paymentsApi.obtenerPago(uuidPago));
-      return await this.actualizarDesdeRemoto(remoto);
-    } catch {
-      return this.obtenerLocal(uuidPago);
+      const remoto = await this.primero(this.paymentsApi.obtenerPago(uuidPago, silencioso));
+      await this.actualizarDesdeRemoto(remoto);
+      return remoto;
+    } catch (error) {
+      if (local && error instanceof HttpErrorResponse && [0, 502, 503, 504].includes(error.status)) return local;
+      throw error;
     }
   }
 
@@ -257,7 +265,7 @@ export class PendingPaymentService {
       await this.limpiarAceptacion(local.uuid_orden ?? null);
       await this.audit.registrar({
         tipo: 'PAGO',
-        mensaje: 'Nuevo total del servidor aceptado; pedido confirmado.',
+        mensaje: 'Nuevo total del servidor aceptado; pedido registrado y pendiente de pago.',
         detalle: { uuid_pago: uuidPago, uuid_operacion: operacion.uuid_operacion }
       });
       return this.enviarPago(local);
@@ -523,7 +531,7 @@ export class PendingPaymentService {
     return this.prepararDesdeRemoto(remoto);
   }
 
-  private prepararDesdeRemoto(remoto: ResultadoPagoDiferido): PreparacionPago {
+  prepararDesdeRemoto(remoto: ResultadoPagoDiferido): PreparacionPago {
     const secret = remoto.client_secret ?? null;
     if (secret) this.secretos.set(remoto.uuid_pago, secret);
     return {

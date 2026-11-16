@@ -1,5 +1,6 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient, HttpParams } from '@angular/common/http';
+import { HttpClient, HttpContext, HttpParams } from '@angular/common/http';
+import { OMITIR_CARGA_GLOBAL } from '../interceptors/loading.interceptor';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import {
@@ -37,8 +38,10 @@ export class PagosDiferidosApiService {
     return this.http.post<ResultadoPagoDiferido>(`${this.API_URL}/diferidos`, datos);
   }
 
-  obtenerPago(uuidPago: string): Observable<ResultadoPagoDiferido> {
-    return this.http.get<ResultadoPagoDiferido>(`${this.API_URL}/diferidos/${uuidPago}`);
+  obtenerPago(uuidPago: string, silencioso = false): Observable<ResultadoPagoDiferido> {
+    return this.http.get<ResultadoPagoDiferido>(`${this.API_URL}/diferidos/${uuidPago}`, {
+      context: new HttpContext().set(OMITIR_CARGA_GLOBAL, silencioso)
+    });
   }
 
   confirmarPago(uuidPago: string): Observable<ResultadoPagoDiferido> {

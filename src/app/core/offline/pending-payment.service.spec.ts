@@ -1,5 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { of, throwError } from 'rxjs';
+import { HttpErrorResponse } from '@angular/common/http';
 import { ConnectivityService } from './connectivity.service';
 import { DeviceService } from './device.service';
 import { IndexedDbService } from './indexed-db.service';
@@ -252,6 +253,49 @@ describe('PendingPaymentService - pagos diferidos', () => {
     expect(resultado.clientSecret).toBe('cs_test_123');
     expect(resultado.mensaje).toContain('redirección');
   });
+
+  it('consulta un pago sin registrar solo en IndexedDB', async () => {
+    memoria.sembrar('pagos', crearPagoFalso());
+    await cola.encolar('ORDEN_PAGO_DIFERIDO', { uuid_pago: 'pago-1', uuid_orden: 'orden-1' });
+
+    expect((await servicio.estado('pago-1'))?.estado).toBe('PENDIENTE_ENVIO');
+    expect(api.obtenerPago).not.toHaveBeenCalled();
+  });
+
+  it('no consulta Stripe mientras el total requiere aceptación', async () => {
+    memoria.sembrar('pagos', crearPagoFalso());
+    memoria.sembrar('ordenes_locales', crearOrdenFalsa({ requiere_aceptacion: true }));
+    const operacion = await cola.encolar('ORDEN_PAGO_DIFERIDO', { uuid_pago: 'pago-1', uuid_orden: 'orden-1' });
+    await cola.marcarRechazada(operacion.uuid_operacion, 'Aceptación requerida', { requiere_aceptacion: true });
+
+    await servicio.estado('pago-1', true);
+    expect(api.obtenerPago).not.toHaveBeenCalled();
+  });
+
+  it('consulta el pago registrado por sincronización y conserva la URL solo en memoria', async () => {
+    memoria.sembrar('pagos', crearPagoFalso());
+    const operacion = await cola.encolar('ORDEN_PAGO_DIFERIDO', { uuid_pago: 'pago-1', uuid_orden: 'orden-1' });
+    await cola.marcarConfirmada(operacion.uuid_operacion, { pago: { id: 77 } });
+    api.obtenerPago.and.returnValue(of(remoto()));
+
+    const pago = await servicio.estado('pago-1', true);
+    expect(api.obtenerPago).toHaveBeenCalledOnceWith('pago-1', true);
+    expect((pago as ResultadoPagoDiferido).checkout_url).toBe(remoto().checkout_url);
+    const guardado = memoria.obtener('pagos', 'pago-1') as any;
+    expect(guardado.pago_id).toBe(77);
+    expect(guardado.client_secret).toBeUndefined();
+    expect(guardado.checkout_url).toBeUndefined();
+  });
+
+  for (const status of [401, 403, 404, 500]) {
+    it(`propaga el error HTTP ${status} de un pago ya registrado`, async () => {
+      memoria.sembrar('pagos', crearPagoFalso({ pago_id: 77, orden_id: 15 }));
+      const error = new HttpErrorResponse({ status });
+      api.obtenerPago.and.returnValue(throwError(() => error));
+
+      await expectAsync(servicio.estado('pago-1', true)).toBeRejectedWith(error);
+    });
+  }
 
   it('sin conexión consulta el pago local y cuenta los pendientes reales', async () => {
     conectividad.cambiar(false);

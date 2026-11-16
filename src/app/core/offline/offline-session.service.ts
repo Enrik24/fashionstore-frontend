@@ -47,6 +47,7 @@ export class OfflineSessionService {
   /** Vigencia agotada: el usuario puede consultar pero no operar offline. */
   private vencida = signal(true);
   private temporizadorVencimiento: ReturnType<typeof setTimeout> | null = null;
+  public sesionVencida = computed(() => !!this.sesionLocal()?.token_offline_cifrado && this.vencida());
   public soloConsulta = computed(() => this.vencida() || !this.sesionActiva());
 
   constructor() {
@@ -232,6 +233,9 @@ export class OfflineSessionService {
   }
 
   async limpiarSesionLocal(): Promise<void> {
+    if (this.temporizadorVencimiento) clearTimeout(this.temporizadorVencimiento);
+    this.temporizadorVencimiento = null;
+    this.vencida.set(true);
     this.tokenSignal.set(null);
     this.expiraSignal.set(null);
     this.claveCrypto = null;

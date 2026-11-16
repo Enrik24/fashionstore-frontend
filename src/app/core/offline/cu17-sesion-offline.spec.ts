@@ -1,4 +1,4 @@
-import { TestBed } from '@angular/core/testing';
+import { TestBed, fakeAsync, flushMicrotasks, tick } from '@angular/core/testing';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom, of } from 'rxjs';
 import { OfflineSessionService } from './offline-session.service';
@@ -193,6 +193,24 @@ describe('CU17 - Sesión offline con PIN', () => {
         { provide: StorageService, useValue: storage }
       ]
     });
+  });
+
+  it('una sesión vigente queda protegida tras recargar, pero no vencida', fakeAsync(() => {
+    precargar(sesionLocal({ expira_en: new Date(Date.now() + 1000).toISOString() }));
+    servicio = TestBed.inject(OfflineSessionService);
+    flushMicrotasks();
+
+    expect(servicio.sesionActiva()).toBeFalse();
+    expect(servicio.soloConsulta()).toBeTrue();
+    expect(servicio.sesionVencida()).toBeFalse();
+    tick(1000);
+    expect(servicio.sesionVencida()).toBeTrue();
+  }));
+
+  it('sin sesión guardada no anuncia un plazo vencido', async () => {
+    const service = await crearServicio();
+    expect(service.soloConsulta()).toBeTrue();
+    expect(service.sesionVencida()).toBeFalse();
   });
 
   it('rechaza un PIN trivial sin registrar el dispositivo', async () => {

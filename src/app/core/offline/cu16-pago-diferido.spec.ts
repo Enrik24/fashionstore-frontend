@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { HttpErrorResponse } from '@angular/common/http';
 import { ActivatedRoute, Router } from '@angular/router';
 import { of, throwError } from 'rxjs';
 import { ConnectivityService } from './connectivity.service';
@@ -151,8 +152,8 @@ describe('CU16 - Confirmación de pago diferido', () => {
   });
 
   it('si el pago en línea falla, devuelve el estado local sin romper la pantalla', async () => {
-    memoria.sembrar('pagos', crearPagoFalso({ estado: 'EN_COLA' }));
-    api.obtenerPago.and.returnValue(throwError(() => new Error('sin red')));
+    memoria.sembrar('pagos', crearPagoFalso({ estado: 'EN_COLA', pago_id: 77, orden_id: 15 }));
+    api.obtenerPago.and.returnValue(throwError(() => new HttpErrorResponse({ status: 0 })));
 
     const pago = await servicio.estado('pago-1');
 

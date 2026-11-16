@@ -11,13 +11,14 @@ describe('CatalogFiltersComponent', () => {
 
   beforeEach(async () => {
     mockCatalogApi = jasmine.createSpyObj('CatalogApiService', [
-      'getCategories', 'getSeasons', 'getSizes', 'getColors', 'getCollections'
+      'getCategories', 'getSeasons', 'getSizes', 'getColors', 'getCollections', 'listarTiposTela'
     ]);
     mockCatalogApi.getCategories.and.returnValue(of([{ id: 1, nombre: 'Vestidos' }]));
     mockCatalogApi.getSeasons.and.returnValue(of([{ id: 1, nombre: 'Verano 2026', fecha_inicio: '2026-01-01', fecha_fin: '2026-03-31' }]));
     mockCatalogApi.getSizes.and.returnValue(of([{ id: 1, nombre: 'M', valor: 'M' }]));
     mockCatalogApi.getColors.and.returnValue(of([{ id: 1, nombre: 'Azul', codigo_hex: '#0000ff' }]));
     mockCatalogApi.getCollections.and.returnValue(of([]));
+    mockCatalogApi.listarTiposTela.and.returnValue(of([]));
 
     await TestBed.configureTestingModule({
       imports: [CatalogFiltersComponent, HttpClientTestingModule],

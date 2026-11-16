@@ -17,7 +17,7 @@ import { OfflineSessionService } from '../../../core/offline/offline-session.ser
       <div
         class="connectivity-banner"
         [class.is-offline]="!connectivity.enLinea()"
-        [class.is-pending]="connectivity.enLinea() && (porVencer() || offlineSession.soloConsulta())"
+        [class.is-pending]="connectivity.enLinea() && (porVencer() || offlineSession.sesionVencida())"
         role="status"
         aria-live="polite"
       >
@@ -36,11 +36,12 @@ import { OfflineSessionService } from '../../../core/offline/offline-session.ser
           </span>
         }
 
-        @if (!offlineSession.sesionActiva() && connectivity.enLinea()) {
-          <a routerLink="/profile/offline" class="banner-action">Configurar modo offline</a>
-        }
-        @if (!offlineSession.sesionActiva() && !connectivity.enLinea()) {
+        @if (offlineSession.sesionVencida() && connectivity.enLinea()) {
+          <a routerLink="/offline/acceso" class="banner-action">Renovar con PIN</a>
+        } @else if (!offlineSession.sesionActiva() && offlineSession.sesionLocal()?.token_offline_cifrado) {
           <a routerLink="/offline/acceso" class="banner-action">Entrar con PIN →</a>
+        } @else if (!offlineSession.sesionActiva() && connectivity.enLinea()) {
+          <a routerLink="/profile/offline" class="banner-action">Configurar modo offline</a>
         }
       </div>
     }
@@ -70,7 +71,7 @@ export class ConnectivityBannerComponent implements OnInit, OnDestroy {
 
   public horasRestantes = computed<number | null>(() => {
     const local = this.offlineSession.sesionLocal();
-    if (!local?.expira_en) return null;
+    if (!local?.token_offline_cifrado || !local.expira_en) return null;
     const restante = Date.parse(local.expira_en) - this.ahora();
     return restante > 0 ? Math.ceil(restante / 3_600_000) : 0;
   });
@@ -83,18 +84,20 @@ export class ConnectivityBannerComponent implements OnInit, OnDestroy {
   public visible = computed<boolean>(() =>
     !this.connectivity.enLinea() ||
     this.offlineSession.sesionActiva() ||
-    this.porVencer() ||
-    this.offlineSession.soloConsulta()
+    this.offlineSession.sesionLocal() !== null
   );
 
   public mensaje = computed<string>(() => {
+    if (this.offlineSession.sesionVencida()) {
+      return 'El plazo de la sesión offline terminó: solo consulta. Renueva con PIN cuando tengas conexión.';
+    }
     if (!this.connectivity.enLinea()) {
       return this.offlineSession.sesionActiva()
         ? 'Sin conexión — operando en modo offline con datos locales.'
         : 'Sin conexión — inicia sesión con tu PIN para operar offline.';
     }
-    if (this.offlineSession.soloConsulta()) {
-      return 'El plazo de la sesión offline terminó: solo consulta hasta que vuelvas a autenticarte.';
+    if (!this.offlineSession.sesionActiva() && this.offlineSession.sesionLocal()?.token_offline_cifrado) {
+      return 'Tu sesión offline está protegida: ingresa el PIN para desbloquearla. El plazo sigue vigente.';
     }
     if (this.porVencer()) {
       return `Tu sesión offline vence en ${this.horasRestantes()} h. Renueva con conexión.`;
@@ -104,7 +107,8 @@ export class ConnectivityBannerComponent implements OnInit, OnDestroy {
 
   public icono = computed<string>(() => {
     if (!this.connectivity.enLinea()) return 'ri-wifi-off-line';
-    if (this.offlineSession.soloConsulta()) return 'ri-lock-line';
+    if (this.offlineSession.sesionVencida()
+      || (!this.offlineSession.sesionActiva() && this.offlineSession.sesionLocal()?.token_offline_cifrado)) return 'ri-lock-line';
     if (this.porVencer()) return 'ri-time-line';
     return 'ri-wifi-line';
   });
