@@ -204,10 +204,16 @@ export class OfflineCatalogService {
   }
 
   async descargarStock(sucursalId?: number | null): Promise<number> {
-    const sucursal = sucursalId ?? this.sucursalActual();
-    if (sucursal == null) return 0;
+    // Al omitir `sucursal_id` el backend devuelve el stock de TODAS las
+    // sucursales activas del tenant (ver `_sucursal_para` en router.py). Antes
+    // se usaba la sucursal del usuario y, si no tenía, se retornaba 0 sin
+    // llamar a la API: el botón "Solo stock" no descargaba nada y la reserva /
+    // el POS offline (que permiten elegir cualquier sucursal) veían el stock
+    // local vacío. Solo se filtra cuando el llamador pide explícitamente una
+    // sucursal concreta.
+    const sucursal = sucursalId !== undefined ? sucursalId : null;
     const stock = await this.primero(this.offlineApi.obtenerStock(sucursal));
-    const normalizado = this.normalizarStock(stock, this.tenantId());
+    const normalizado = this.normalizarStock(stock ?? [], this.tenantId());
     await this.indexedDb.guardarLote('stock', normalizado);
     return normalizado.length;
   }
@@ -276,11 +282,15 @@ export class OfflineCatalogService {
   }
 
   async datosCompletos(): Promise<boolean> {
-    const [productos, variantes] = await Promise.all([
+    const [productos, variantes, stock] = await Promise.all([
       this.indexedDb.contar('productos'),
-      this.indexedDb.contar('variantes')
+      this.indexedDb.contar('variantes'),
+      this.indexedDb.contar('stock')
     ]);
-    return productos > 0 && variantes > 0;
+    // El stock es parte del paquete offline: sin él la reserva y el POS muestran
+    // "Sin stock local". No marcar el paquete como completo en ese caso evita
+    // enmascarar una descarga de inventario fallida o parcial (CU05).
+    return productos > 0 && variantes > 0 && stock > 0;
   }
 
   priorizarCatalogo<T extends { variante_producto_id: number; stock_disponible?: number; vendidos?: number }>(candidatos: T[]): T[] {

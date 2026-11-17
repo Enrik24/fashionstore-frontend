@@ -85,7 +85,8 @@ export class OfflineApiService {
     let params = new HttpParams();
     if (sucursalId != null) params = params.set('sucursal_id', String(sucursalId));
     if (actualizadoDesde) params = params.set('actualizado_desde', actualizadoDesde);
-    return this.http.get<StockOffline[]>(`${this.API_URL}/stock`, { params });
+    // Igual que `obtenerPaquete`: sin timeout la UI se queda en "Descargando…".
+    return this.http.get<StockOffline[]>(`${this.API_URL}/stock`, { params }).pipe(timeout(120_000));
   }
 
   obtenerClientes(): Observable<ClienteOffline[]> {

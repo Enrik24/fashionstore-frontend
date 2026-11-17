@@ -259,7 +259,9 @@ export class OfflineDownloadComponent implements OnInit {
   async descargar(completo: boolean): Promise<void> {
     this.planSelectivo.set(null);
     await this.ejecutarDescarga(
-      () => this.catalog.descargarPaquete({ completo }),
+      () => completo
+        ? this.catalog.descargarPaquete({ completo: true })
+        : this.catalog.descargarIncremental(),
       completo ? 'Descargando paquete completo…' : 'Descargando cambios incrementales…'
     );
   }
@@ -334,7 +336,10 @@ export class OfflineDownloadComponent implements OnInit {
       this.resultado.set(res);
       this.progreso.set(100);
       this.mensajeProgreso.set('Descarga completada.');
-      this.toast.success(`${res.productos} productos y ${res.variantes} variantes disponibles offline.`, 'Datos descargados');
+      const detalle = res.stock > 0 && res.productos === 0 && res.variantes === 0
+        ? `${res.stock} registros de stock actualizados.`
+        : `${res.productos} productos y ${res.variantes} variantes disponibles offline.`;
+      this.toast.success(detalle, 'Datos descargados');
       await this.cargarEstado();
     } catch (error) {
       this.toast.error(this.mensajeError(error), 'No se pudo descargar');

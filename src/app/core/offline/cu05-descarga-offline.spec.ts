@@ -34,6 +34,7 @@ describe('OfflineCatalogService - descarga y catálogo local', () => {
   let api: jasmine.SpyObj<OfflineApiService>;
   let quota: jasmine.SpyObj<StorageQuotaService>;
   let auditoria: ReturnType<typeof crearAuditoriaFalsa>;
+  let storage: StorageService;
 
   const configuracion: ConfiguracionOffline = {
     id: 1,
@@ -126,6 +127,7 @@ describe('OfflineCatalogService - descarga y catálogo local', () => {
   beforeEach(() => {
     memoria = crearMemoriaOffline();
     auditoria = crearAuditoriaFalsa();
+    storage = crearStorageFalso();
     api = jasmine.createSpyObj<OfflineApiService>('OfflineApiService', [
       'obtenerPaquete',
       'obtenerCatalogoIncremental',
@@ -149,7 +151,7 @@ describe('OfflineCatalogService - descarga y catálogo local', () => {
       providers: [
         { provide: IndexedDbService, useValue: memoria.servicio },
         { provide: DeviceService, useValue: crearDeviceFalso() },
-        { provide: StorageService, useValue: crearStorageFalso() },
+        { provide: StorageService, useValue: storage },
         { provide: OfflineApiService, useValue: api },
         { provide: StorageQuotaService, useValue: quota },
         { provide: OfflineAuditService, useValue: auditoria.servicio },
@@ -272,6 +274,40 @@ describe('OfflineCatalogService - descarga y catálogo local', () => {
 
     expect(actualizado?.cantidad_disponible).toBe(3);
     expect(agotado?.cantidad_disponible).toBe(0);
+  });
+
+  it('descarga el stock de todas las sucursales cuando no se pide una concreta', async () => {
+    // El botón "Solo stock" no pasa sucursal; aunque el usuario no tenga
+    // sucursal asignada debe bajar el inventario (regresión: retornaba 0).
+    spyOn(storage, 'getUser').and.returnValue({ id: 7, sucursal_id: null } as never);
+    api.obtenerStock.and.returnValue(of(stock));
+
+    const total = await servicio.descargarStock();
+
+    expect(api.obtenerStock).toHaveBeenCalledWith(null);
+    expect(total).toBe(2);
+    const guardado = memoria.todos<StockOffline>('stock');
+    expect(guardado.length).toBe(2);
+    expect(guardado[0].clave).toBe('101:2');
+    expect(guardado[0].tenant_id).toBe(10);
+  });
+
+  it('descarga solo la sucursal pedida cuando se indica explícitamente', async () => {
+    api.obtenerStock.and.returnValue(of([stock[0]]));
+
+    const total = await servicio.descargarStock(3);
+
+    expect(api.obtenerStock).toHaveBeenCalledWith(3);
+    expect(total).toBe(1);
+  });
+
+  it('no marca el paquete como completo si falta el stock local', async () => {
+    memoria.sembrar('productos', productos[0]);
+    memoria.sembrar('variantes', variantes[0]);
+    expect(await servicio.datosCompletos()).toBeFalse();
+
+    memoria.sembrar('stock', stock[0]);
+    expect(await servicio.datosCompletos()).toBeTrue();
   });
 
   it('programa la descarga automática según la hora del tenant', async () => {
