@@ -20,6 +20,7 @@ import { OfflineQueueService } from './offline-queue.service';
 import { OfflineAuditService } from './offline-audit.service';
 import { StockWebSocketService } from '../services/stock-websocket.service';
 import { OfflineSessionService } from './offline-session.service';
+import { ConflictService } from './conflict.service';
 import { EventoPagoWs } from '../models/offline.model';
 
 export interface PreparacionPago {
@@ -71,6 +72,7 @@ export class PendingPaymentService {
   private audit = inject(OfflineAuditService);
   private websocket = inject(StockWebSocketService);
   private offlineSession = inject(OfflineSessionService);
+  private conflicts = inject(ConflictService);
 
   public pagosPendientes = signal<number>(0);
   public montoEnCola = signal<number>(0);
@@ -263,6 +265,7 @@ export class PendingPaymentService {
     if (estado === 'CONFIRMADA' || estado === 'DUPLICADA') {
       await this.queue.marcarConfirmada(operacion.uuid_operacion, detalle);
       await this.limpiarAceptacion(local.uuid_orden ?? null);
+      await this.conflicts.actualizarTrasAceptacion(operacion.uuid_operacion);
       await this.audit.registrar({
         tipo: 'PAGO',
         mensaje: 'Nuevo total del servidor aceptado; pedido registrado y pendiente de pago.',

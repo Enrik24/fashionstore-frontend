@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 import { ConflictService } from './conflict.service';
 import { ConnectivityService } from './connectivity.service';
 import { DeviceService } from './device.service';
@@ -43,9 +43,15 @@ describe('ConflictService - conflictos y resolución', () => {
       'obtenerConflicto',
       'resolverConflicto',
       'descartarConflicto',
-      'contarConflictosPendientes'
+      'contarConflictosPendientes',
+      'obtenerOperacion'
     ]);
     api.listarConflictos.and.returnValue(of([]));
+    api.obtenerOperacion.and.returnValue(of({
+      uuid_operacion: 'op-1', tipo_operacion: 'ORDEN_PAGO_DIFERIDO',
+      estado_sincronizacion: 'CONFIRMADA', requiere_revision: false, intentos: 2,
+      resultado_json: { orden_id: 16 }
+    }));
 
     TestBed.configureTestingModule({
       providers: [
@@ -180,6 +186,67 @@ describe('ConflictService - conflictos y resolución', () => {
       STOCK_INSUFICIENTE: 2,
       PRECIO_DESACTUALIZADO: 1
     });
+  });
+
+  it('actualiza solo conflictos de precio de la operación aceptada y conserva otros tenants', async () => {
+    memoria.sembrar('conflictos', crearConflictoFalso({ id: 3, uuid_operacion: 'op-3', tipo_conflicto: 'PRECIO_DESACTUALIZADO' }));
+    memoria.sembrar('conflictos', crearConflictoFalso({ id: 2, uuid_operacion: 'op-2', tipo_conflicto: 'PRECIO_DESACTUALIZADO' }));
+    memoria.sembrar('conflictos', crearConflictoFalso({ id: 4, uuid_operacion: 'op-3', tenant_id: 20, tipo_conflicto: 'PRECIO_DESACTUALIZADO' }));
+    memoria.sembrar('conflictos', crearConflictoFalso({ id: 5, uuid_operacion: 'op-3', tipo_conflicto: 'STOCK_INSUFICIENTE' }));
+    api.obtenerConflicto.and.returnValue(of(crearConflictoFalso({
+      id: 3, uuid_operacion: 'op-3', tipo_conflicto: 'PRECIO_DESACTUALIZADO',
+      resuelto: true, resolucion: 'AUTOMATICA'
+    })));
+    api.contarConflictosPendientes.and.returnValue(of({ pendientes: 2 }));
+    await servicio.actualizarTrasAceptacion('op-3');
+    expect(api.obtenerConflicto).toHaveBeenCalledOnceWith(3);
+    expect(servicio.nuevos()).toBe(2);
+    expect((memoria.obtener('conflictos', 3) as any).resuelto).toBeTrue();
+    expect((await servicio.listarLocal({ resuelto: false })).map(c => c.id).sort()).toEqual([2, 5]);
+    expect((memoria.obtener('conflictos', 4) as any).resuelto).toBeFalse();
+  });
+
+  it('no inventa una resolución cuando falla la consulta tras aceptar', async () => {
+    memoria.sembrar('conflictos', crearConflictoFalso({ id: 3, uuid_operacion: 'op-3', tipo_conflicto: 'PRECIO_DESACTUALIZADO' }));
+    api.obtenerConflicto.and.returnValue(throwError(() => new Error('Sin red')));
+    api.contarConflictosPendientes.and.returnValue(throwError(() => new Error('Sin red')));
+    await servicio.actualizarTrasAceptacion('op-3');
+    expect((memoria.obtener('conflictos', 3) as any).resuelto).toBeFalse();
+    expect(servicio.nuevos()).toBe(1);
+  });
+
+  it('AJUSTAR conserva la operación confirmada y su resultado sin programar reintentos', async () => {
+    const operacion = crearOperacionFalsa({
+      uuid_operacion: 'op-1', estado_sincronizacion: 'CONFIRMADA',
+      resultado_json: { orden_id: 1266, pago: { id: 76 } }
+    });
+    memoria.sembrar('operaciones', operacion);
+    api.resolverConflicto.and.returnValue(of(crearConflictoFalso({
+      id: 2, uuid_operacion: 'op-1', resuelto: true, resolucion: 'AJUSTAR'
+    })));
+    await servicio.resolver(2, 'AJUSTAR');
+    expect(await cola.obtener('op-1')).toEqual(operacion);
+    expect(api.obtenerOperacion).not.toHaveBeenCalled();
+  });
+
+  it('AJUSTAR refleja la confirmación remota en lugar de reenviar la operación', async () => {
+    memoria.sembrar('operaciones', crearOperacionFalsa({ uuid_operacion: 'op-1', estado_sincronizacion: 'CONFLICTO' }));
+    api.resolverConflicto.and.returnValue(of(crearConflictoFalso({
+      uuid_operacion: 'op-1', resuelto: true, resolucion: 'AJUSTAR'
+    })));
+    await servicio.resolver(1, 'AJUSTAR');
+    expect((await cola.obtener('op-1'))?.estado_sincronizacion).toBe('CONFIRMADA');
+    expect((await cola.obtener('op-1'))?.resultado_json).toEqual({ orden_id: 16 });
+  });
+
+  it('una resolución fallida no altera la cola ni descuenta pendientes', async () => {
+    const operacion = crearOperacionFalsa({ uuid_operacion: 'op-1', estado_sincronizacion: 'CONFLICTO' });
+    memoria.sembrar('operaciones', operacion);
+    servicio.nuevos.set(1);
+    api.resolverConflicto.and.returnValue(throwError(() => new Error('La operación no pudo confirmarse')));
+    await expectAsync(servicio.resolver(1, 'CONFIRMAR')).toBeRejected();
+    expect(await cola.obtener('op-1')).toEqual(operacion);
+    expect(servicio.nuevos()).toBe(1);
   });
 
   it('acumula los avisos nuevos notificados por WebSocket', () => {

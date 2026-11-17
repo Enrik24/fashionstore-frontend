@@ -169,6 +169,14 @@ export class ConflictService {
     return conflicto;
   }
 
+  async actualizarTrasAceptacion(uuidOperacion: string): Promise<void> {
+    const pendientes = await this.listarLocal({ resuelto: false, tipo: 'PRECIO_DESACTUALIZADO' });
+    await Promise.all(pendientes
+      .filter((conflicto) => conflicto.uuid_operacion === uuidOperacion)
+      .map((conflicto) => this.obtenerDetalle(conflicto.id)));
+    await this.contarPendientes();
+  }
+
   async descartar(id: number, motivo?: string): Promise<LogConflicto> {
     const conflicto = await this.primero(this.offlineApi.descartarConflicto(id, motivo));
     await this.cachear([conflicto]);
@@ -230,12 +238,13 @@ export class ConflictService {
     decision: 'CONFIRMAR' | 'RECHAZAR' | 'AJUSTAR'
   ): Promise<void> {
     if (!conflicto.uuid_operacion) return;
-    if (decision === 'CONFIRMAR') {
-      await this.queue.marcarConfirmada(conflicto.uuid_operacion, conflicto.detalle_json ?? undefined);
-    } else if (decision === 'RECHAZAR') {
+    const local = await this.queue.obtener(conflicto.uuid_operacion);
+    if (local?.estado_sincronizacion === 'CONFIRMADA') return;
+    const remota = await this.primero(this.offlineApi.obtenerOperacion(conflicto.uuid_operacion));
+    if (remota.estado_sincronizacion === 'CONFIRMADA') {
+      await this.queue.marcarConfirmada(conflicto.uuid_operacion, remota.resultado_json ?? undefined);
+    } else if (decision === 'RECHAZAR' && remota.estado_sincronizacion === 'RECHAZADA') {
       await this.queue.marcarRechazada(conflicto.uuid_operacion, conflicto.observaciones ?? 'Rechazado por el administrador');
-    } else {
-      await this.queue.prepararReintento(conflicto.uuid_operacion);
     }
   }
 

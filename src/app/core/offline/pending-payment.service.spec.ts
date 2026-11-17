@@ -17,6 +17,8 @@ import {
   ConectividadFalsa,
   crearAuditoriaFalsa,
   crearConectividadFalsa,
+  crearConflictoFalso,
+  crearOperacionFalsa,
   crearDeviceFalso,
   crearMemoriaOffline,
   crearOrdenFalsa,
@@ -36,6 +38,7 @@ describe('PendingPaymentService - pagos diferidos', () => {
   let memoria: MemoriaOffline;
   let conectividad: ConectividadFalsa;
   let api: jasmine.SpyObj<PagosDiferidosApiService>;
+  let offlineApi: jasmine.SpyObj<OfflineApiService>;
   let auditoria: ReturnType<typeof crearAuditoriaFalsa>;
 
   function remoto(parcial: Partial<ResultadoPagoDiferido> = {}): ResultadoPagoDiferido {
@@ -74,6 +77,10 @@ describe('PendingPaymentService - pagos diferidos', () => {
     ]);
     api.contarPendientes.and.returnValue(of({ pendientes: 0 }));
     api.listarPagos.and.returnValue(of([]));
+    offlineApi = jasmine.createSpyObj<OfflineApiService>('OfflineApiService', [
+      'reintentarOperacion', 'contarConflictosPendientes', 'obtenerConflicto'
+    ]);
+    offlineApi.contarConflictosPendientes.and.returnValue(of({ pendientes: 0 }));
 
     const websocket = {
       suscribirPagos: () => () => undefined,
@@ -87,7 +94,7 @@ describe('PendingPaymentService - pagos diferidos', () => {
         { provide: StorageService, useValue: crearStorageFalso() },
         { provide: ConnectivityService, useValue: conectividad.servicio },
         { provide: PagosDiferidosApiService, useValue: api },
-        { provide: OfflineApiService, useValue: { reintentarOperacion: () => of({ estado: 'CONFIRMADA' }) } },
+        { provide: OfflineApiService, useValue: offlineApi },
         { provide: OfflineAuditService, useValue: auditoria.servicio },
         { provide: StockWebSocketService, useValue: websocket },
         { provide: OfflineSessionService, useValue: { tokenOffline: () => 'token-offline' } }
@@ -101,6 +108,58 @@ describe('PendingPaymentService - pagos diferidos', () => {
   afterEach(() => {
     servicio.detenerEscuchaPagos();
     TestBed.resetTestingModule();
+  });
+
+  it('aceptar el total refresca el conflicto y contador sin alterar pedidos previos ni cobrar', async () => {
+    const anterior = crearPagoFalso({ uuid_pago: 'pago-anterior', uuid_orden: 'orden-anterior', estado: 'CONFIRMADO', monto: 175 });
+    const ordenAnterior = crearOrdenFalsa({ uuid_orden: 'orden-anterior', uuid_pago: 'pago-anterior', estado: 'CONFIRMADA' });
+    memoria.sembrar('pagos', anterior);
+    memoria.sembrar('ordenes_locales', ordenAnterior);
+    memoria.sembrar('pagos', crearPagoFalso());
+    memoria.sembrar('ordenes_locales', crearOrdenFalsa({ requiere_aceptacion: true, total_nuevo: 148.75 }));
+    memoria.sembrar('operaciones', crearOperacionFalsa({
+      uuid_operacion: 'op-1', estado_sincronizacion: 'RECHAZADA',
+      payload: { uuid_pago: 'pago-1', uuid_orden: 'orden-1' }
+    }));
+    memoria.sembrar('conflictos', crearConflictoFalso({
+      id: 3, uuid_operacion: 'op-1', tipo_conflicto: 'PRECIO_DESACTUALIZADO'
+    }));
+    offlineApi.reintentarOperacion.and.returnValue(of({
+      uuid_operacion: 'op-1', estado: 'CONFIRMADA', reintentar: false, codigo_http_sugerido: 200,
+      datos_resultado: { orden_id: 16, pago: { id: 77 } }
+    }));
+    offlineApi.obtenerConflicto.and.returnValue(of(crearConflictoFalso({
+      id: 3, uuid_operacion: 'op-1', tipo_conflicto: 'PRECIO_DESACTUALIZADO', resuelto: true, resolucion: 'AUTOMATICA'
+    })));
+    api.obtenerPago.and.returnValue(of(remoto({ monto: 148.75, estado: 'REQUIERE_ACCION_CLIENTE', requiere_accion: true })));
+    const preparacion = await servicio.aceptarNuevoTotal('pago-1');
+    expect(preparacion.requiereAccion).toBeTrue();
+    expect(offlineApi.reintentarOperacion).toHaveBeenCalledOnceWith('op-1', { acepta_nuevo_total: true });
+    expect(offlineApi.obtenerConflicto).toHaveBeenCalledOnceWith(3);
+    expect(offlineApi.contarConflictosPendientes).toHaveBeenCalledTimes(1);
+    expect((memoria.obtener('conflictos', 3) as any).resuelto).toBeTrue();
+    expect((memoria.obtener('ordenes_locales', 'orden-1') as any).requiere_aceptacion).toBeFalse();
+    expect(memoria.obtener('pagos', 'pago-anterior')).toEqual(anterior);
+    expect(memoria.obtener('ordenes_locales', 'orden-anterior')).toEqual(ordenAnterior);
+    expect(api.crearPago).not.toHaveBeenCalled();
+    expect(api.confirmarPago).not.toHaveBeenCalled();
+  });
+
+  it('rechazo al aceptar conserva el conflicto pendiente y no prepara el pago', async () => {
+    memoria.sembrar('pagos', crearPagoFalso());
+    memoria.sembrar('ordenes_locales', crearOrdenFalsa({ requiere_aceptacion: true }));
+    memoria.sembrar('operaciones', crearOperacionFalsa({
+      uuid_operacion: 'op-1', estado_sincronizacion: 'RECHAZADA', payload: { uuid_pago: 'pago-1', uuid_orden: 'orden-1' }
+    }));
+    offlineApi.reintentarOperacion.and.returnValue(of({
+      uuid_operacion: 'op-1', estado: 'RECHAZADA', reintentar: true, codigo_http_sugerido: 409,
+      motivo: 'El precio cambió de nuevo', datos_resultado: { requiere_aceptacion: true, total_nuevo: 160 }
+    }));
+    await expectAsync(servicio.aceptarNuevoTotal('pago-1')).toBeRejectedWithError('El precio cambió de nuevo');
+    expect(offlineApi.obtenerConflicto).not.toHaveBeenCalled();
+    expect(offlineApi.contarConflictosPendientes).not.toHaveBeenCalled();
+    expect(api.obtenerPago).not.toHaveBeenCalled();
+    expect(api.crearPago).not.toHaveBeenCalled();
   });
 
   it('encola el pago una sola vez y sin persistir el client_secret', async () => {
